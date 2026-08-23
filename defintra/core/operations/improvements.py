@@ -5,6 +5,7 @@ change risk, estimated cost, and blast radius.
 """
 
 from typing import Any, Dict, List
+
 from defintra.core.db.database import Database
 from defintra.core.models.entities import ChangeRisk
 

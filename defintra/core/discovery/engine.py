@@ -29,7 +29,6 @@ from defintra.core.models.entities import (
 )
 from defintra.core.requirements.ears import EARSEngine
 
-
 # Pre-seeded Domain Templates (§5)
 DOMAIN_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "COLLEGE_STUDENT": {

@@ -5,6 +5,7 @@ and contracts, and triggers alerts when churn exceeds stability budgets.
 """
 
 from typing import Any, Dict, List, Optional
+
 from defintra.core.db.database import Database
 from defintra.core.models.entities import ArtifactState
 

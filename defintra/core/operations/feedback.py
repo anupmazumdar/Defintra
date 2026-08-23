@@ -6,6 +6,7 @@ originating requirements, contracts, and assumptions in the knowledge graph.
 
 import re
 from typing import Any, Dict, List
+
 from defintra.core.db.database import Database
 from defintra.core.graph.engine import ProjectGraph
 

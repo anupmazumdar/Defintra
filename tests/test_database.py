@@ -1,6 +1,9 @@
-import tempfile
+import gc
 import os
+import tempfile
+
 import pytest
+
 from defintra.core.db.database import Database
 from defintra.core.models.entities import (
     ArtifactState,
@@ -15,8 +18,6 @@ from defintra.core.models.entities import (
     RequirementPriority,
 )
 
-
-import gc
 
 @pytest.fixture
 def temp_db():

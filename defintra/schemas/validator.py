@@ -6,6 +6,7 @@ Validates exported DIR data structures against the canonical JSON Schema.
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
 import jsonschema
 
 

@@ -1,7 +1,9 @@
-import tempfile
-import os
 import gc
+import os
+import tempfile
+
 import pytest
+
 from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.mcp.server import DefintraMCPServer
 

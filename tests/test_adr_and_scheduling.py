@@ -1,4 +1,5 @@
 import pytest
+
 from defintra.core.contracts.versioning import ContractVersioningEngine
 from defintra.core.db.database import Database
 from defintra.core.decisions.adr import ADRGenerator

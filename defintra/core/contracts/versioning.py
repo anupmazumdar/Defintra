@@ -5,6 +5,7 @@ and UI contracts, detecting breaking schema drift across AI agent iterations.
 """
 
 from typing import Any, Dict, List
+
 from defintra.core.db.database import Database
 
 
@@ -86,7 +87,7 @@ class ContractVersioningEngine:
         v_parts = current_version.split(".")
         try:
             major, minor, patch = int(v_parts[0]), int(v_parts[1]), int(v_parts[2])
-        except Exception:
+        except (IndexError, ValueError):
             major, minor, patch = 1, 0, 0
 
         if breaking_changes:

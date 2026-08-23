@@ -5,9 +5,9 @@ Global Context + Role Guidance + Relevant Requirements + Applicable Contracts +
 Locked Decisions + Dependencies + Explainable Inclusions/Exclusions.
 """
 
-from enum import Enum
 import json
 import re
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from defintra.context.optimizer import TokenEstimator

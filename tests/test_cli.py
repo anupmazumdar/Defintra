@@ -1,9 +1,11 @@
-import tempfile
-import os
 import gc
 import json
+import os
 import shutil
+import tempfile
+
 from typer.testing import CliRunner
+
 from defintra.cli.main import app
 
 runner = CliRunner()

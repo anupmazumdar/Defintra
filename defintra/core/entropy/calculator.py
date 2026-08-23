@@ -4,14 +4,15 @@ Calculates real-time project entropy (0.0 to 1.0) and health percentage (0% to 1
 providing actionable breakdown of unresolved ambiguity, pending unknowns, and active conflicts.
 """
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
 from defintra.core.models.entities import (
-    Requirement,
-    Decision,
-    Assumption,
-    Unknown,
-    Conflict,
     ArtifactState,
+    Assumption,
+    Conflict,
+    Decision,
+    Requirement,
+    Unknown,
 )
 
 

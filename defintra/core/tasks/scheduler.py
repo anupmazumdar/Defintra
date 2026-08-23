@@ -5,6 +5,7 @@ and critical path analyses for AI multi-agent software engineering.
 """
 
 from typing import Any, Dict, List
+
 from defintra.context.compiler import AgentRole
 from defintra.core.db.database import Database
 

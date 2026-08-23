@@ -3,12 +3,12 @@ Defintra Embedded Web Dashboard Server (§5, §7, §21, §22).
 Serves the rich dark-mode Defintra Control Center and provides JSON REST API.
 """
 
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-from pathlib import Path
-from typing import Any
 import urllib.parse
 import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
 
 from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
 from defintra.core.conflicts.engine import ConflictEngine
@@ -216,11 +216,11 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             target_str = payload.get("target", "markdown")
             try:
                 role = AgentRole[role_str.upper()]
-            except Exception:
+            except KeyError:
                 role = AgentRole.GENERAL
             try:
                 target = TargetFormat[target_str.upper()]
-            except Exception:
+            except KeyError:
                 target = TargetFormat.MARKDOWN
 
             compiler = ContextCompiler(db)
@@ -249,7 +249,7 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             role_str = payload.get("role", "SOFTWARE_ARCHITECT")
             try:
                 role = AgentRole[role_str.upper()]
-            except Exception:
+            except KeyError:
                 role = AgentRole.SOFTWARE_ARCHITECT
             coordinator = TeamCoordinator(db)
             res = coordinator.dispatch_task(project.id, task, role)
@@ -298,8 +298,8 @@ def start_ui_server(port: int = 8765, db_path: str = ".defintra/project.db", ope
     if open_browser:
         try:
             webbrowser.open(url)
-        except Exception:
-            pass
+        except (webbrowser.Error, OSError):
+            pass  # Suppress browser launch failure in headless environments
     try:
         server.serve_forever()
     except KeyboardInterrupt:

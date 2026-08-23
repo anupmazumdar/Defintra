@@ -138,12 +138,12 @@ class DefintraMCPServer:
         """
         try:
             agent_role = AgentRole[role.upper()]
-        except Exception:
+        except KeyError:
             agent_role = AgentRole.GENERAL
 
         try:
             tgt_fmt = TargetFormat[target_format.upper()]
-        except Exception:
+        except KeyError:
             tgt_fmt = TargetFormat.MARKDOWN
 
         compiled = self.compiler.compile(
@@ -206,7 +206,7 @@ class DefintraMCPServer:
             return {"error": "No project found"}
         try:
             agent_role = AgentRole[role.upper()]
-        except Exception:
+        except KeyError:
             agent_role = AgentRole.SOFTWARE_ARCHITECT
 
         return self.team_coordinator.dispatch_task(project.id, task, agent_role)

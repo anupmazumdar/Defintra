@@ -1,13 +1,14 @@
-import tempfile
+import gc
 import os
+import tempfile
+
 import pytest
+
 from defintra.core.db.database import Database
 from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.export.exporter import Exporter
 from defintra.schemas.validator import validate_dir
 
-
-import gc
 
 @pytest.fixture
 def populated_project():

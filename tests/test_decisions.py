@@ -1,6 +1,9 @@
-import tempfile
+import gc
 import os
+import tempfile
+
 import pytest
+
 from defintra.core.db.database import Database
 from defintra.core.decisions.ledger import DecisionLedger
 from defintra.core.models.entities import (
@@ -9,8 +12,6 @@ from defintra.core.models.entities import (
     RejectedAlternative,
 )
 
-
-import gc
 
 @pytest.fixture
 def temp_db():

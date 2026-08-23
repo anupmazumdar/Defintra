@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from defintra.core.db.database import Database
 from defintra.core.models.entities import current_utc_time
 from defintra.export.exporter import Exporter
@@ -110,7 +111,7 @@ class SnapshotManager:
                         "created_at": data.get("created_at"),
                         "file_path": str(file),
                     })
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 continue
         return sorted(snapshots, key=lambda s: s.get("created_at", ""), reverse=True)
 

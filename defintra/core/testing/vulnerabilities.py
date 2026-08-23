@@ -5,6 +5,7 @@ persistent, automated regression test suites.
 """
 
 from typing import Any, Dict
+
 from defintra.core.db.database import Database
 
 

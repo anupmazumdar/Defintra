@@ -1,4 +1,5 @@
 import pytest
+
 from defintra.core.brownfield.scanner import BrownfieldScanner
 from defintra.core.db.database import Database
 

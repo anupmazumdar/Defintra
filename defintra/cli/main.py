@@ -8,6 +8,7 @@ Architecture Stability Budget, and Semantic Spec Diffing.
 
 from pathlib import Path
 from typing import Optional
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -198,12 +199,12 @@ def compile_task(
 
     try:
         agent_role = AgentRole[role.upper()]
-    except Exception:
+    except KeyError:
         agent_role = AgentRole.GENERAL
 
     try:
         tgt_fmt = TargetFormat[target.upper()]
-    except Exception:
+    except KeyError:
         tgt_fmt = TargetFormat.MARKDOWN
 
     compiler = ContextCompiler(db)
@@ -354,7 +355,7 @@ def team(
 
     try:
         agent_role = AgentRole[role.upper()]
-    except Exception:
+    except KeyError:
         agent_role = AgentRole.SOFTWARE_ARCHITECT
 
     coordinator = TeamCoordinator(db)

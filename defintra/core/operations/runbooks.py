@@ -5,6 +5,7 @@ failover, and zero-downtime deployment.
 """
 
 from typing import Any, List
+
 from defintra.core.db.database import Database
 
 

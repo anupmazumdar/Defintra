@@ -1,11 +1,12 @@
-import tempfile
+import gc
 import os
+import tempfile
+
 import pytest
+
 from defintra.core.db.database import Database
 from defintra.core.discovery.engine import DiscoveryEngine
 
-
-import gc
 
 @pytest.fixture
 def temp_db():

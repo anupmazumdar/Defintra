@@ -5,8 +5,8 @@ data models, API endpoints, and dependencies into the Defintra Knowledge Graph.
 """
 
 import os
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from defintra.core.db.database import Database
@@ -208,16 +208,16 @@ class BrownfieldScanner:
                     tables = re.findall(r"class\s+([A-Za-z0-9_]+)\(.*(?:Base|Model).*\):", content)
                     for t in tables:
                         sql_tables.append(t)
-                except Exception:
-                    pass
+                except (OSError, UnicodeDecodeError):
+                    pass  # Ignore unreadable or non-UTF8 source files
 
             elif f_path.suffix == ".sql":
                 try:
                     content = f_path.read_text(encoding="utf-8", errors="ignore")
                     create_tables = re.findall(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_]+)", content, re.IGNORECASE)
                     sql_tables.extend(create_tables)
-                except Exception:
-                    pass
+                except (OSError, UnicodeDecodeError):
+                    pass  # Ignore unreadable SQL files
 
         # Create API Contract if endpoints found
         if api_endpoints:

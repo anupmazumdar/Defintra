@@ -33,3 +33,11 @@ defintra = "defintra.cli.main:app"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["defintra*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+

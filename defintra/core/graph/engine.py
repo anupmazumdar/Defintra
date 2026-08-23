@@ -5,6 +5,7 @@ blast-radius impact analysis, confidence propagation, and Mermaid/ASCII renderin
 """
 
 from typing import Any, Dict, List
+
 import networkx as nx
 
 from defintra.core.db.database import Database

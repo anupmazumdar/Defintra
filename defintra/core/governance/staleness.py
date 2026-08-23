@@ -6,6 +6,7 @@ Proactively surfaces stale high-confidence items when dependencies change.
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List
+
 from defintra.core.db.database import Database
 from defintra.core.graph.engine import ProjectGraph
 from defintra.core.models.entities import current_utc_time
@@ -179,7 +180,7 @@ class StalenessEngine:
         try:
             ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
             days_elapsed = (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0
-        except Exception:
+        except (ValueError, TypeError):
             days_elapsed = 0.0
 
         # Downstream churn penalty

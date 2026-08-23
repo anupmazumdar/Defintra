@@ -1,4 +1,5 @@
 import pytest
+
 from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
 from defintra.core.discovery.engine import DiscoveryEngine
