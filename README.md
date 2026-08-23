@@ -149,11 +149,17 @@ defintra compile "Implement Stripe webhook handler" \
 # claude (XML tagged) | openai (Markdown) | gemini | antigravity
 ```
 
-### Multi-Agent Team Dispatch
+### Multi-Agent Team Dispatch & Model Routing
 ```bash
-# Dispatch tasks across specialized AI team roles with structured handoffs
+# Dispatch tasks across specialized AI team roles with structured handoffs (§16, §17)
 defintra team "Design Auth & Tenant Isolation" --role SOFTWARE_ARCHITECT
 defintra team "Implement JWT Refresh Rotation" --role BACKEND_ENGINEER
+
+# Inspect the chronological stream of multi-agent structured coordination events (§17, §34)
+defintra events
+
+# Query optimal AI model routing recommendations and cost/context tiers (§19)
+defintra route BACKEND_ENGINEER --complexity HIGH
 ```
 
 ### Conflict Detection & Resolution

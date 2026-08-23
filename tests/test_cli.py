@@ -238,6 +238,17 @@ def test_cli_governance_and_new_commands(monkeypatch):
         assert "ACTION REQUIRED" in res_gate_block.output
         assert "Release blocked by governance policies" in res_gate_block.output
 
+        # Test Events command & Route command
+        runner.invoke(app, ["team", "Design API Gateway", "--role", "SOFTWARE_ARCHITECT"])
+        res_events = runner.invoke(app, ["events"])
+        assert res_events.exit_code == 0
+        assert "Multi-Agent Structured Coordination Event Log" in res_events.output
+
+        res_route = runner.invoke(app, ["route", "BACKEND_ENGINEER", "--complexity", "HIGH"])
+        assert res_route.exit_code == 0
+        assert "AI Model Routing Recommendation" in res_route.output
+        assert "Recommended AI Model" in res_route.output
+
         # Test failure case on missing project
         res_gate_no_proj = runner.invoke(app, ["gate", "--project", "non_existent_proj_id"])
         assert res_gate_no_proj.exit_code == 1

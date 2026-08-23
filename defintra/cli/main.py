@@ -377,6 +377,69 @@ def team(
 
 
 @app.command()
+def events(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Display the chronological immutable stream of multi-agent structured coordination events (§17, §34).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    coordinator = TeamCoordinator(db)
+    evts = coordinator.get_events(project.id)
+
+    if not evts:
+        console.print("[yellow]No team events recorded yet. Run `defintra team <task>` to dispatch agent tasks.[/yellow]")
+        return
+
+    table = Table(title="Multi-Agent Structured Coordination Event Log (§17, §34)")
+    table.add_column("Event ID", style="cyan")
+    table.add_column("Event Type", style="green")
+    table.add_column("Actor Role", style="magenta")
+    table.add_column("Summary", style="white")
+    table.add_column("Timestamp", style="dim")
+
+    for e in evts:
+        table.add_row(e["id"], e["event_type"], e["actor_role"], e["summary"], e["created_at"][:19])
+
+    console.print(table)
+
+
+@app.command()
+def route(
+    role: str = typer.Argument("SOFTWARE_ARCHITECT", help="Target agent role (e.g. BACKEND_ENGINEER, SECURITY_ENGINEER)"),
+    complexity: str = typer.Option("MEDIUM", "--complexity", "-c", help="Task complexity tier (LOW, MEDIUM, HIGH, CRITICAL)"),
+):
+    """
+    Inspect optimal AI model routing recommendations, context window tiers, and cost estimates (§19).
+    """
+    db = get_db()
+    coordinator = TeamCoordinator(db)
+    try:
+        agent_role = AgentRole[role.upper()]
+    except KeyError:
+        agent_role = AgentRole.SOFTWARE_ARCHITECT
+
+    routing = coordinator.route_model(agent_role, task_complexity=complexity.upper())
+    console.print(
+        Panel(
+            f"[bold]Target Role:[/bold] [cyan]{agent_role.value}[/cyan]\n"
+            f"[bold]Task Complexity:[/bold] [yellow]{complexity.upper()}[/yellow]\n"
+            f"[bold]Recommended AI Model:[/bold] [bold green]{routing.recommended_model}[/bold green]\n"
+            f"[bold]Context Window Tier:[/bold] {routing.context_window_tier}\n"
+            f"[bold]Estimated Cost Tier:[/bold] {routing.estimated_cost_tier}\n"
+            f"[bold]Selection Rationale:[/bold] {routing.reason}",
+            title="AI Model Routing Recommendation (§19)",
+            border_style="green",
+        )
+    )
+
+
+@app.command()
 def incident(
     error_text: str = typer.Argument(..., help="Error message, stack trace, or incident description"),
     project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
