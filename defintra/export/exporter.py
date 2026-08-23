@@ -8,7 +8,7 @@ Produces both:
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from defintra.core.db.database import Database
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.graph.engine import ProjectGraph
