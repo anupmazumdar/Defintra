@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from defintra.core.audit.logger import DiscoveryAuditLogger
 from defintra.core.db.database import Database
 from defintra.core.decisions.ledger import DecisionLedger
-from defintra.core.entropy.calculator import EntropyCalculator
+from defintra.core.entropy.calculator import EntropyCalculator, SpecHealthReport
 from defintra.core.models.entities import (
     ApprovalLevel,
     ArtifactState,

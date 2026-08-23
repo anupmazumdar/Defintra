@@ -332,7 +332,9 @@ def generate_test_pack(
         content = gen.generate_human_testing_pack(project.id)
 
     if output_file:
-        Path(output_file).write_text(content, encoding="utf-8")
+        out_path = Path(output_file)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(content, encoding="utf-8")
         console.print(f"[bold green]Test pack written to '{output_file}'[/bold green]")
     else:
         console.print(content)

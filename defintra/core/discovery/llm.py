@@ -6,7 +6,7 @@ Supports OpenAI, Gemini, Anthropic, and local zero-dependency Heuristic Mock Pro
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from defintra.core.models.entities import (
