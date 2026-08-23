@@ -23,8 +23,12 @@ class StructuredEventType(str, Enum):
     TEST_RESULT = "TEST_RESULT"
     CONFLICT = "CONFLICT"
     DECISION_REQUEST = "DECISION_REQUEST"
+    TASK_ATTEMPTED = "TASK_ATTEMPTED"
+    TASK_RETRIED = "TASK_RETRIED"
+    TASK_FAILED = "TASK_FAILED"
     TASK_COMPLETED = "TASK_COMPLETED"
     DEPENDENCY_UPDATE = "DEPENDENCY_UPDATE"
+    POLICY_CHECK = "POLICY_CHECK"
 
 
 class TeamEvent:
@@ -62,11 +66,13 @@ class ModelRoutingRecommendation:
     def __init__(
         self,
         recommended_model: str,
+        fallback_model: str,
         reason: str,
         context_window_tier: str,
         estimated_cost_tier: str,
     ):
         self.recommended_model = recommended_model
+        self.fallback_model = fallback_model
         self.reason = reason
         self.context_window_tier = context_window_tier
         self.estimated_cost_tier = estimated_cost_tier
@@ -74,6 +80,7 @@ class ModelRoutingRecommendation:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "recommended_model": self.recommended_model,
+            "fallback_model": self.fallback_model,
             "reason": self.reason,
             "context_window_tier": self.context_window_tier,
             "estimated_cost_tier": self.estimated_cost_tier,
@@ -88,11 +95,12 @@ class TeamCoordinator:
     def route_model(self, role: AgentRole, task_complexity: str = "MEDIUM") -> ModelRoutingRecommendation:
         """
         AI Model Routing Engine (§19).
-        Routes tasks to appropriate AI models based on capabilities, cost, and context size.
+        Routes tasks to primary and fallback AI models based on capabilities, cost, and context size.
         """
         if role in [AgentRole.SOFTWARE_ARCHITECT, AgentRole.BACKEND_ENGINEER]:
             return ModelRoutingRecommendation(
                 recommended_model="Claude 3.5 Sonnet / Claude Code",
+                fallback_model="GPT-4o / Local Fast Model",
                 reason="High technical reasoning and complex multi-file architectural consistency",
                 context_window_tier="200k tokens",
                 estimated_cost_tier="Standard High Performance",
@@ -100,6 +108,7 @@ class TeamCoordinator:
         elif role in [AgentRole.PRODUCT_ANALYST, AgentRole.QA_ENGINEER]:
             return ModelRoutingRecommendation(
                 recommended_model="Gemini 1.5 Pro",
+                fallback_model="Claude 3.5 Sonnet",
                 reason="Massive context window for comprehensive requirement analysis and test suite generation",
                 context_window_tier="1M+ tokens",
                 estimated_cost_tier="Cost Efficient",
@@ -107,6 +116,7 @@ class TeamCoordinator:
         elif role == AgentRole.SECURITY_ENGINEER:
             return ModelRoutingRecommendation(
                 recommended_model="GPT-4o / Claude 3.5 Sonnet",
+                fallback_model="Gemini 1.5 Pro",
                 reason="Deterministic vulnerability analysis and strict constraint verification",
                 context_window_tier="128k tokens",
                 estimated_cost_tier="Standard High Performance",
@@ -114,10 +124,131 @@ class TeamCoordinator:
         else:
             return ModelRoutingRecommendation(
                 recommended_model="Claude 3.5 Sonnet / Local Fast Model",
+                fallback_model="Gemini 1.5 Flash",
                 reason="General coding and component authoring",
                 context_window_tier="128k tokens",
                 estimated_cost_tier="Standard",
             )
+
+    def validate_role_output(self, role: AgentRole, output: str) -> tuple[bool, str]:
+        """
+        Sanity validation for role-specific task output (§20).
+        """
+        if not output or not output.strip():
+            return False, "Output is empty or blank."
+        if len(output.strip()) < 20:
+            return False, "Output is too brief / truncated (< 20 chars)."
+        return True, "Output passed sanity checks."
+
+    def execute_adaptive_task(
+        self,
+        project_id: str,
+        task_title: str,
+        role: AgentRole,
+        routing: ModelRoutingRecommendation,
+        prompt: str,
+    ) -> Dict[str, Any]:
+        """
+        Adaptive Execution Loop (§20):
+        Primary Model -> Validate -> (On failure) Retry with Repair Prompt -> (On failure) Fallback Model.
+        """
+        from defintra.core.discovery.llm import MockHeuristicLLMProvider, get_llm_provider
+
+        system_prompt = (
+            f"You are the {role.value} on the Defintra autonomous engineering team. "
+            f"Execute the assigned engineering task thoroughly based on the provided minimum sufficient context."
+        )
+
+        provider = get_llm_provider(routing.recommended_model)
+        is_mock = isinstance(provider, MockHeuristicLLMProvider)
+        models_attempted = [routing.recommended_model]
+        attempts_log = []
+
+        # 1. Attempt with Primary Model
+        self.record_event(
+            project_id=project_id,
+            event_type=StructuredEventType.TASK_ATTEMPTED,
+            actor_role=role,
+            summary=f"Attempting task '{task_title}' via {routing.recommended_model}",
+            payload={"task": task_title, "model": routing.recommended_model, "attempt": 1},
+        )
+
+        try:
+            resp = provider.generate(prompt=prompt, system_prompt=system_prompt)
+            output = resp.content or ""
+        except Exception:
+            output = ""
+
+        valid, reason = self.validate_role_output(role, output)
+        attempts_log.append({"attempt": 1, "model": routing.recommended_model, "valid": valid, "reason": reason})
+
+        # 2. Retry with Repair Prompt if invalid
+        if not valid:
+            self.record_event(
+                project_id=project_id,
+                event_type=StructuredEventType.TASK_RETRIED,
+                actor_role=role,
+                summary=f"Retrying task '{task_title}' on {routing.recommended_model} after diagnosis: {reason}",
+                payload={"task": task_title, "model": routing.recommended_model, "attempt": 2, "diagnostic": reason},
+            )
+            repair_prompt = f"{prompt}\n\n[INSTRUCTION: Previous attempt failed validation ({reason}). Provide a complete, structured, and non-empty technical response.]"
+            try:
+                resp = provider.generate(prompt=repair_prompt, system_prompt=system_prompt)
+                output = resp.content or ""
+            except Exception:
+                output = ""
+            valid, reason = self.validate_role_output(role, output)
+            attempts_log.append({"attempt": 2, "model": routing.recommended_model, "valid": valid, "reason": reason})
+
+        # 3. Fallback to Secondary Model if still invalid
+        if not valid and routing.fallback_model:
+            models_attempted.append(routing.fallback_model)
+            self.record_event(
+                project_id=project_id,
+                event_type=StructuredEventType.TASK_RETRIED,
+                actor_role=role,
+                summary=f"Falling back to secondary model {routing.fallback_model} for task '{task_title}'",
+                payload={"task": task_title, "fallback_model": routing.fallback_model, "reason": "Primary model failed validation"},
+            )
+            fallback_provider = get_llm_provider(routing.fallback_model)
+            try:
+                resp = fallback_provider.generate(prompt=prompt, system_prompt=system_prompt)
+                output = resp.content or ""
+            except Exception:
+                output = ""
+            valid, reason = self.validate_role_output(role, output)
+            attempts_log.append({"attempt": 3, "model": routing.fallback_model, "valid": valid, "reason": reason})
+            provider = fallback_provider
+            is_mock = isinstance(provider, MockHeuristicLLMProvider)
+
+        # 4. Record Final Event
+        final_event_type = StructuredEventType.TASK_COMPLETED if valid else StructuredEventType.TASK_FAILED
+        event = self.record_event(
+            project_id=project_id,
+            event_type=final_event_type,
+            actor_role=role,
+            summary=f"Task '{task_title}' {('completed successfully' if valid else 'failed')} via {provider.__class__.__name__}",
+            payload={
+                "task": task_title,
+                "role": role.value,
+                "routing": routing.to_dict(),
+                "execution_output_snippet": output[:300] if output else "[EMPTY]",
+                "provider": provider.__class__.__name__,
+                "is_mock": is_mock,
+                "models_attempted": models_attempted,
+                "attempts_log": attempts_log,
+            },
+        )
+
+        return {
+            "output": output,
+            "valid": valid,
+            "provider_name": provider.__class__.__name__,
+            "is_mock": is_mock,
+            "models_attempted": models_attempted,
+            "attempts_log": attempts_log,
+            "event": event,
+        }
 
     def dispatch_task(
         self,
@@ -125,9 +256,12 @@ class TeamCoordinator:
         task_title: str,
         role: AgentRole,
         task_complexity: str = "MEDIUM",
+        execute: bool = True,
+        approved_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Dispatches task to specialized AI role with compiled minimum sufficient context (§16, §17).
+        Dispatches task to specialized AI role with compiled minimum sufficient context (§16, §17, §20).
+        Consults Policy Engine before execution if action requires governance approval.
         """
         project = self.db.get_project(project_id)
         if not project:
@@ -143,32 +277,83 @@ class TeamCoordinator:
         # 2. Get Model Routing recommendation
         routing = self.route_model(role, task_complexity)
 
-        # 3. Real AI Execution (§16, §17, §19, §24)
-        from defintra.context.compiler import TargetFormat
-        from defintra.core.discovery.llm import get_llm_provider
-        provider = get_llm_provider(routing.recommended_model)
-        system_prompt = (
-            f"You are the {role.value} on the Defintra autonomous engineering team. "
-            f"Execute the task using the provided minimum sufficient context."
-        )
-        prompt = compiled.render(TargetFormat.MARKDOWN)
-        llm_resp = provider.generate(prompt=prompt, system_prompt=system_prompt)
-        execution_output = llm_resp.content
-
-        # 4. Record event in SQLite audit_events
-        event = self.record_event(
+        # 3. Check Governance Policy (§45)
+        from defintra.core.policy.engine import PolicyEngine
+        pe = PolicyEngine(self.db)
+        inferred_action = pe.infer_action_from_task(task_title)
+        allowed, policy_reason, policy_decision = pe.enforce_action(
             project_id=project_id,
-            event_type=StructuredEventType.TASK_COMPLETED,
+            action_type=inferred_action,
+            approved_by=approved_by,
+        )
+
+        self.record_event(
+            project_id=project_id,
+            event_type=StructuredEventType.POLICY_CHECK,
             actor_role=role,
-            summary=f"Executed task '{task_title}' with role {role.value} via {provider.__class__.__name__}",
+            summary=f"Policy check for task '{task_title}' -> {policy_decision.decision.value} ({inferred_action})",
             payload={
-                "task": task_title,
-                "role": role.value,
-                "routing": routing.to_dict(),
-                "execution_output_snippet": execution_output[:300],
-                "provider": provider.__class__.__name__,
+                "action": inferred_action,
+                "decision": policy_decision.decision.value,
+                "allowed": allowed,
+                "approved_by": approved_by,
+                "reason": policy_reason,
             },
         )
+
+        if not allowed and execute:
+            return {
+                "dispatch_id": f"disp_{uuid.uuid4().hex[:8]}",
+                "project_id": project_id,
+                "task": task_title,
+                "assigned_role": role.value,
+                "routing": routing.to_dict(),
+                "policy_enforcement": {
+                    "action": inferred_action,
+                    "decision": policy_decision.decision.value,
+                    "risk_level": policy_decision.risk_level.value,
+                    "allowed": False,
+                    "reason": policy_reason,
+                },
+                "status": "BLOCKED_BY_POLICY",
+                "execution_output": f"[EXECUTION BLOCKED BY POLICY ENGINE]\n{policy_reason}",
+                "provider": "None",
+                "is_mock": False,
+                "compiled_context_summary": {
+                    "requirements_count": len(compiled.requirements),
+                    "decisions_count": len(compiled.decisions),
+                    "token_count": compiled.token_count,
+                },
+            }
+
+        # 4. Execution
+        if execute:
+            from defintra.context.compiler import TargetFormat
+            prompt = compiled.render(TargetFormat.MARKDOWN)
+            exec_res = self.execute_adaptive_task(
+                project_id=project_id,
+                task_title=task_title,
+                role=role,
+                routing=routing,
+                prompt=prompt,
+            )
+            execution_output = exec_res["output"]
+            provider_name = exec_res["provider_name"]
+            is_mock = exec_res["is_mock"]
+            event = exec_res["event"]
+            attempts_log = exec_res["attempts_log"]
+        else:
+            execution_output = "[ROUTING ONLY — EXECUTE FLAG NOT SET]"
+            provider_name = "None (Routing Only)"
+            is_mock = False
+            attempts_log = []
+            event = self.record_event(
+                project_id=project_id,
+                event_type=StructuredEventType.CHANGE_REQUEST,
+                actor_role=role,
+                summary=f"Dispatched routing for task '{task_title}' to role {role.value}",
+                payload={"task": task_title, "role": role.value, "routing": routing.to_dict()},
+            )
 
         return {
             "dispatch_id": f"disp_{uuid.uuid4().hex[:8]}",
@@ -176,13 +361,23 @@ class TeamCoordinator:
             "task": task_title,
             "assigned_role": role.value,
             "routing": routing.to_dict(),
+            "policy_enforcement": {
+                "action": inferred_action,
+                "decision": policy_decision.decision.value,
+                "risk_level": policy_decision.risk_level.value,
+                "allowed": True,
+                "reason": policy_reason,
+            },
             "compiled_context_summary": {
                 "requirements_count": len(compiled.requirements),
                 "decisions_count": len(compiled.decisions),
                 "token_count": compiled.token_count,
             },
+            "status": "COMPLETED" if execute else "ROUTED",
             "execution_output": execution_output,
-            "provider": provider.__class__.__name__,
+            "provider": provider_name,
+            "is_mock": is_mock,
+            "attempts_log": attempts_log,
             "initial_event": event.to_dict(),
         }
 

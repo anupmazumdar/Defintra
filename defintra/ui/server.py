@@ -187,6 +187,29 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             rep = rec_engine.diagnose_project(project.id)
             self._send_json(rep.to_dict())
 
+        elif path == "/api/policies":
+            if not project:
+                self._send_json({"policies": []})
+                return
+            from defintra.core.policy.engine import PolicyEngine
+            pe = PolicyEngine(db)
+            policies = pe.list_policies(project.id)
+            self._send_json({"project_id": project.id, "policies": [p.to_dict() for p in policies]})
+
+        elif path == "/api/events":
+            if not project:
+                self._send_json({"events": []})
+                return
+            coord = TeamCoordinator(db)
+            evts = coord.get_events(project.id)
+            self._send_json({"project_id": project.id, "events": evts})
+
+        elif path == "/api/benchmarks":
+            from defintra.core.benchmark.runner import BenchmarkRunner
+            runner = BenchmarkRunner(db)
+            history = runner.get_history(project_id=project.id if project else None, limit=20)
+            self._send_json({"benchmarks": [h.to_dict() for h in history]})
+
         else:
             self.send_error(404, "Not Found")
 

@@ -160,6 +160,22 @@ CREATE TABLE IF NOT EXISTS policies (
     UNIQUE(project_id, action_type)
 );
 
+CREATE TABLE IF NOT EXISTS benchmarks (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    input_summary TEXT NOT NULL,
+    defintra_req_count INTEGER DEFAULT 0,
+    defintra_health_score REAL DEFAULT 0.0,
+    defintra_entropy REAL DEFAULT 1.0,
+    defintra_token_count INTEGER DEFAULT 0,
+    defintra_duration_ms REAL DEFAULT 0.0,
+    naive_req_count INTEGER DEFAULT 0,
+    naive_token_count INTEGER DEFAULT 0,
+    naive_duration_ms REAL DEFAULT 0.0,
+    comparison_summary TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
 -- Indexes for efficient graph and entity lookups
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirements(project_id);
 CREATE INDEX IF NOT EXISTS idx_dec_project ON decisions(project_id);
@@ -170,4 +186,6 @@ CREATE INDEX IF NOT EXISTS idx_dep_src ON dependencies(source_type, source_id);
 CREATE INDEX IF NOT EXISTS idx_dep_tgt ON dependencies(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_dep_proj ON dependencies(project_id);
 CREATE INDEX IF NOT EXISTS idx_pol_proj ON policies(project_id);
+CREATE INDEX IF NOT EXISTS idx_bm_proj ON benchmarks(project_id);
+
 

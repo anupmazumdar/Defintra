@@ -340,12 +340,15 @@ def generate_test_pack(
 
 @app.command()
 def team(
-    task: str = typer.Argument(..., help="Task description to dispatch to the AI team"),
-    role: str = typer.Option("SOFTWARE_ARCHITECT", "--role", "-r", help="Assigned role (SOFTWARE_ARCHITECT, BACKEND_ENGINEER, FRONTEND_ENGINEER, SECURITY_ENGINEER, QA_ENGINEER)"),
+    task: str = typer.Argument(..., help="Task description or goal for AI agent role"),
+    role: str = typer.Option("SOFTWARE_ARCHITECT", "--role", "-r", help="Target agent role (BACKEND_ENGINEER, FRONTEND_ENGINEER, SOFTWARE_ARCHITECT, SECURITY_ENGINEER, QA_ENGINEER)"),
+    complexity: str = typer.Option("MEDIUM", "--complexity", "-c", help="Task complexity: LOW, MEDIUM, HIGH, CRITICAL"),
+    execute: bool = typer.Option(True, "--execute/--no-execute", help="Execute task with routed AI provider and Adaptive Execution loop (§16, §20)"),
+    approved_by: Optional[str] = typer.Option(None, "--approved-by", help="Explicit human authorization if action requires governance approval (§45)"),
     project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
 ):
     """
-    Coordinate and dispatch tasks across specialized AI team roles with model routing (§16, §17, §19).
+    Coordinate and dispatch tasks across specialized AI team roles with model routing (§16, §17, §19, §20).
     """
     db = get_db()
     project = db.get_project(project_id) if project_id else db.get_first_project()
@@ -359,18 +362,51 @@ def team(
         agent_role = AgentRole.SOFTWARE_ARCHITECT
 
     coordinator = TeamCoordinator(db)
-    res = coordinator.dispatch_task(project.id, task, agent_role)
+    res = coordinator.dispatch_task(
+        project_id=project.id,
+        task_title=task,
+        role=agent_role,
+        task_complexity=complexity,
+        execute=execute,
+        approved_by=approved_by,
+    )
 
     routing = res["routing"]
-    exec_snippet = res.get("execution_output", "")[:250]
+    exec_snippet = res.get("execution_output", "")[:400]
+    
+    if res.get("status") == "BLOCKED_BY_POLICY":
+        pe = res.get("policy_enforcement", {})
+        console.print(
+            Panel(
+                f"[bold red]EXECUTION REFUSED BY POLICY ENGINE (§45)[/bold red]\n\n"
+                f"[bold]Inferred Action:[/bold] {pe.get('action')}\n"
+                f"[bold]Governance Decision:[/bold] [bold red]{pe.get('decision')}[/bold red] (Risk: {pe.get('risk_level')})\n"
+                f"[bold]Rationale:[/bold] {pe.get('reason')}\n\n"
+                f"[dim]If authorized, provide explicit authorization using `--approved-by <name>`.[/dim]",
+                title="Policy Governance Gate",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+    provider_desc = res.get("provider", "None")
+    if res.get("is_mock"):
+        provider_desc = f"{provider_desc} [yellow](Heuristic Mock / Offline Engine)[/yellow]"
+    else:
+        provider_desc = f"[green]{provider_desc}[/green] (Model: {routing['recommended_model']})"
+
+    attempts_info = ""
+    if res.get("attempts_log") and len(res["attempts_log"]) > 1:
+        attempts_info = f"\n[bold]Adaptive Execution Attempts:[/bold] {len(res['attempts_log'])} (Diagnostic retry/fallback triggered)"
+
     console.print(
         Panel(
             f"[bold]Dispatch ID:[/bold] {res['dispatch_id']}\n"
             f"[bold]Task:[/bold] {res['task']}\n"
             f"[bold]Assigned Role:[/bold] [cyan]{res['assigned_role']}[/cyan]\n"
-            f"[bold]AI Execution Engine:[/bold] [bold green]{res.get('provider', 'MockHeuristicLLMProvider')}[/bold green] (Model: {routing['recommended_model']})\n"
+            f"[bold]AI Execution Engine:[/bold] {provider_desc}\n"
             f"[bold]Routing Rationale:[/bold] {routing['reason']}\n"
-            f"[bold]Context Compiled:[/bold] {res['compiled_context_summary']['requirements_count']} requirements, {res['compiled_context_summary']['decisions_count']} decisions ({res['compiled_context_summary']['token_count']} tokens)\n\n"
+            f"[bold]Context Compiled:[/bold] {res['compiled_context_summary']['requirements_count']} requirements, {res['compiled_context_summary']['decisions_count']} decisions ({res['compiled_context_summary']['token_count']} tokens){attempts_info}\n\n"
             f"[bold]Agent Execution Response Snippet:[/bold]\n[dim]{exec_snippet}...[/dim]",
             title="AI Team Collaboration & Task Execution (§16, §17)",
             border_style="cyan",
@@ -1250,11 +1286,163 @@ def sandbox_create(
             f"[bold]Branch:[/bold] [cyan]{res.branch_name}[/cyan]\n"
             f"[bold]Isolation:[/bold] {res.isolation_type}\n"
             f"[bold]Snapshot Hash:[/bold] [dim]{res.snapshot_hash}[/dim]\n"
+            f"[bold]Allowed Actions:[/bold] {len(res.allowed_actions)} actions permitted\n"
             f"[bold]Status:[/bold] [green]{res.status}[/green]",
             title="Isolated Sandbox Created (§25)",
             border_style="green",
         )
     )
+
+
+@sandbox_app.command(name="exec")
+def sandbox_exec(
+    action: str = typer.Argument(..., help="Action to execute inside sandbox (e.g. read_repository, modify_file, execute_shell, deploy)"),
+    task: str = typer.Option("task_execution", "--task", "-t", help="Task ID"),
+    approved_by: Optional[str] = typer.Option(None, "--approved-by", help="Authorization name if action requires governance approval (§45)"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Execute a governed action inside an isolated staging sandbox with Policy Engine enforcement (§25, §45).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.sandbox.manager import SandboxManager
+    sbx = SandboxManager(db)
+    sandbox = sbx.create_sandbox(project.id, task_id=task)
+    res = sbx.execute_sandbox_action(sandbox, action_type=action, approved_by=approved_by)
+
+    if not res["allowed"]:
+        console.print(
+            Panel(
+                f"[bold red]SANDBOX ACTION REFUSED BY POLICY ENGINE[/bold red]\n\n"
+                f"[bold]Action:[/bold] {action}\n"
+                f"[bold]Decision:[/bold] [bold red]{res['decision']}[/bold red] (Risk: {res['risk_level']})\n"
+                f"[bold]Rationale:[/bold] {res['reason']}",
+                title="Policy Violation (§45)",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(1)
+
+    console.print(
+        Panel(
+            f"[bold]Sandbox ID:[/bold] {sandbox.sandbox_id}\n"
+            f"[bold]Action:[/bold] {action}\n"
+            f"[bold]Execution Status:[/bold] [bold green]{res['status']}[/bold green]\n"
+            f"[bold]Rationale:[/bold] {res['reason']}",
+            title="Sandbox Action Executed (§25, §45)",
+            border_style="green",
+        )
+    )
+
+
+benchmark_app = typer.Typer(help="Empirical benchmark harness comparing Defintra vs naive prompting (§40, §46)")
+app.add_typer(benchmark_app, name="benchmark")
+
+
+@benchmark_app.command(name="run")
+def benchmark_run(
+    input_file: str = typer.Option(..., "--input", "-i", help="Idea text or path to PRD / requirements text file"),
+    name: str = typer.Option("Benchmark Evaluation", "--name", "-n", help="Project name for benchmark"),
+):
+    """
+    Run empirical comparative benchmark: Defintra structured pipeline vs naive prompt baseline (§40).
+    """
+    db = get_db()
+    from defintra.core.benchmark.runner import BenchmarkRunner
+    runner = BenchmarkRunner(db)
+    res = runner.run_benchmark(input_text_or_path=input_file, project_name=name)
+
+    table = Table(title="Empirical Intelligence Benchmark Comparison (§40, §46 V0)")
+    table.add_column("Metric", style="cyan", no_wrap=True)
+    table.add_column("Defintra Structured Graph", style="bold green")
+    table.add_column("Naive Prompt Baseline", style="yellow")
+    table.add_column("Comparative Advantage", style="magenta")
+
+    table.add_row(
+        "Requirements Coverage",
+        f"{res.defintra_req_count} typed EARS requirements",
+        f"{res.naive_req_count} unstructured points",
+        f"+{max(0, res.defintra_req_count - res.naive_req_count)} structured specs",
+    )
+    table.add_row(
+        "Spec Health Score",
+        f"{res.defintra_health_score}/100",
+        "N/A (Unmeasured)",
+        "Quantified Quality",
+    )
+    table.add_row(
+        "Spec Ambiguity (Entropy)",
+        f"{res.defintra_entropy} (0.0=Perfect)",
+        "N/A (High Entropy)",
+        "Grounded Knowledge",
+    )
+    table.add_row(
+        "Compiled Context Size",
+        f"{res.defintra_token_count} tokens",
+        f"{res.naive_token_count} tokens",
+        f"{round(res.defintra_token_count / max(res.naive_token_count, 1), 1)}x Density",
+    )
+    table.add_row(
+        "Processing Latency",
+        f"{res.defintra_duration_ms} ms",
+        f"{res.naive_duration_ms} ms",
+        "Local-First Speed",
+    )
+
+    console.print(table)
+    console.print(
+        Panel(
+            f"[bold]Summary:[/bold] {res.comparison_summary}",
+            title=f"Benchmark Run [{res.benchmark_id}]",
+            border_style="green",
+        )
+    )
+
+
+@benchmark_app.command(name="history")
+def benchmark_history(
+    limit: int = typer.Option(10, "--limit", "-l", help="Number of benchmark runs to display"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Filter by project ID"),
+):
+    """
+    Display historical benchmark comparisons and trends over time (§40).
+    """
+    db = get_db()
+    from defintra.core.benchmark.runner import BenchmarkRunner
+    runner = BenchmarkRunner(db)
+    history = runner.get_history(project_id=project_id, limit=limit)
+
+    if not history:
+        console.print("[yellow]No benchmark history found. Run `defintra benchmark run --input <file>` first.[/yellow]")
+        return
+
+    table = Table(title="Benchmark Historical Trends (§40, §46)")
+    table.add_column("Run ID", style="cyan")
+    table.add_column("Input Preview", style="white")
+    table.add_column("Defintra Reqs", style="green")
+    table.add_column("Naive Reqs", style="yellow")
+    table.add_column("Health", style="bold")
+    table.add_column("Tokens", style="magenta")
+    table.add_column("Recorded At", style="dim")
+
+    for h in history:
+        table.add_row(
+            h.benchmark_id,
+            h.input_summary[:35] + "...",
+            str(h.defintra_req_count),
+            str(h.naive_req_count),
+            f"{h.defintra_health_score}%",
+            f"{h.defintra_token_count}",
+            h.created_at[:19],
+        )
+
+    console.print(table)
+
 
 
 @app.command(name="ui")

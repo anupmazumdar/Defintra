@@ -261,10 +261,39 @@ def test_cli_governance_and_new_commands(monkeypatch):
         assert res_policy_list.exit_code == 0
         assert "Autonomous Agent Governance & Action Policy Table" in res_policy_list.output
 
+        # Test Team execution & policy block
+        res_team_exec = runner.invoke(app, ["team", "Design microservice API", "--role", "BACKEND_ENGINEER", "--execute"])
+        assert res_team_exec.exit_code == 0
+        assert "AI Execution Engine" in res_team_exec.output
+
+        res_team_blocked = runner.invoke(app, ["team", "delete production data and drop all tables", "--role", "BACKEND_ENGINEER", "--execute"])
+        assert res_team_blocked.exit_code == 1
+        assert "EXECUTION REFUSED BY POLICY ENGINE" in res_team_blocked.output
+
+        # Test Sandbox execution & policy block
+        res_sbx_exec_allow = runner.invoke(app, ["sandbox", "exec", "read_repository"])
+        assert res_sbx_exec_allow.exit_code == 0
+        assert "Sandbox Action Executed" in res_sbx_exec_allow.output
+
+        res_sbx_exec_deny = runner.invoke(app, ["sandbox", "exec", "delete_production_data"])
+        assert res_sbx_exec_deny.exit_code == 1
+        assert "SANDBOX ACTION REFUSED BY POLICY ENGINE" in res_sbx_exec_deny.output
+
+        # Test Benchmark CLI commands (§40, §46)
+        res_bm_run = runner.invoke(app, ["benchmark", "run", "--input", "Build real-time collaborative code editor with WebSockets"])
+        assert res_bm_run.exit_code == 0
+        assert "Empirical Intelligence Benchmark Comparison" in res_bm_run.output
+        assert "Requirements Coverage" in res_bm_run.output
+
+        res_bm_hist = runner.invoke(app, ["benchmark", "history"])
+        assert res_bm_hist.exit_code == 0
+        assert "Benchmark Historical Trends" in res_bm_hist.output
+
         # Test failure case on missing project
         res_gate_no_proj = runner.invoke(app, ["gate", "--project", "non_existent_proj_id"])
         assert res_gate_no_proj.exit_code == 1
     finally:
         gc.collect()
         shutil.rmtree(tmpdir, ignore_errors=True)
+
 

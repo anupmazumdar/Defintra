@@ -24,6 +24,8 @@ class SandboxState:
         snapshot_hash: str,
         status: str,  # "ACTIVE", "TESTING", "MERGED", "ROLLED_BACK"
         created_at: str,
+        allowed_actions: Optional[list[str]] = None,
+        denied_actions: Optional[list[str]] = None,
     ):
         self.sandbox_id = sandbox_id
         self.project_id = project_id
@@ -32,6 +34,8 @@ class SandboxState:
         self.snapshot_hash = snapshot_hash
         self.status = status
         self.created_at = created_at
+        self.allowed_actions = allowed_actions or []
+        self.denied_actions = denied_actions or []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -42,6 +46,8 @@ class SandboxState:
             "snapshot_hash": self.snapshot_hash,
             "status": self.status,
             "created_at": self.created_at,
+            "allowed_actions": self.allowed_actions,
+            "denied_actions": self.denied_actions,
         }
 
 
@@ -59,7 +65,8 @@ class SandboxManager:
         isolation_type: str = "git_branch",
     ) -> SandboxState:
         """
-        Initializes an isolated staging sandbox for autonomous or human execution (§25).
+        Initializes an isolated staging sandbox for autonomous or human execution (§25, §45).
+        Tags sandbox with capability-scoped allowed and denied actions derived from the policy engine.
         """
         sandbox_id = f"sbx_{uuid.uuid4().hex[:8]}"
         branch_name = f"defintra/{project_id}/{task_id}"
@@ -69,6 +76,11 @@ class SandboxManager:
         hasher.update(f"{project_id}_{task_id}_{current_utc_time()}".encode("utf-8"))
         snapshot_hash = hasher.hexdigest()[:16]
 
+        # Derive capability scopes from policy engine
+        policies = self.policy_engine.list_policies(project_id)
+        allowed_actions = [p.action_type for p in policies if p.decision.value != "DENY"]
+        denied_actions = [p.action_type for p in policies if p.decision.value == "DENY"]
+
         sandbox = SandboxState(
             sandbox_id=sandbox_id,
             project_id=project_id,
@@ -77,6 +89,8 @@ class SandboxManager:
             snapshot_hash=snapshot_hash,
             status="ACTIVE",
             created_at=current_utc_time(),
+            allowed_actions=allowed_actions,
+            denied_actions=denied_actions,
         )
 
         return sandbox
@@ -91,6 +105,34 @@ class SandboxManager:
         Consults the Policy Engine before an agent performs an action in the sandbox (§25, §45).
         """
         return self.policy_engine.evaluate_action(project_id, action_type, context=context)
+
+    def execute_sandbox_action(
+        self,
+        sandbox: SandboxState,
+        action_type: str,
+        approved_by: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Enforces policy boundaries on actions executed inside the sandbox (§25, §45).
+        Refuses execution on DENY or unapproved REQUIRES_APPROVAL actions.
+        """
+        allowed, reason, decision = self.policy_engine.enforce_action(
+            project_id=sandbox.project_id,
+            action_type=action_type,
+            approved_by=approved_by,
+            context=context,
+        )
+
+        return {
+            "sandbox_id": sandbox.sandbox_id,
+            "action_type": action_type,
+            "allowed": allowed,
+            "status": "EXECUTED" if allowed else "BLOCKED",
+            "decision": decision.decision.value,
+            "risk_level": decision.risk_level.value,
+            "reason": reason,
+        }
 
     def validate_governance_gate(
         self,

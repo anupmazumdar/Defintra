@@ -6,7 +6,7 @@ Manages local SQLite database, transactions, entity CRUD, and dependency graph p
 import json
 import sqlite3
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from defintra.core.models.entities import (
     ApprovalLevel,
@@ -662,3 +662,60 @@ class Database:
                 )
                 for row in rows
             ]
+
+    # ==========================================
+    # Benchmark Operations (§40, §46)
+    # ==========================================
+    def save_benchmark(self, bm_data: dict[str, Any]):
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO benchmarks (
+                    id, project_id, input_summary, defintra_req_count, defintra_health_score,
+                    defintra_entropy, defintra_token_count, defintra_duration_ms, naive_req_count,
+                    naive_token_count, naive_duration_ms, comparison_summary, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    defintra_req_count=excluded.defintra_req_count,
+                    defintra_health_score=excluded.defintra_health_score,
+                    defintra_entropy=excluded.defintra_entropy,
+                    defintra_token_count=excluded.defintra_token_count,
+                    defintra_duration_ms=excluded.defintra_duration_ms,
+                    naive_req_count=excluded.naive_req_count,
+                    naive_token_count=excluded.naive_token_count,
+                    naive_duration_ms=excluded.naive_duration_ms,
+                    comparison_summary=excluded.comparison_summary
+                """,
+                (
+                    bm_data["id"],
+                    bm_data["project_id"],
+                    bm_data["input_summary"],
+                    bm_data.get("defintra_req_count", 0),
+                    bm_data.get("defintra_health_score", 0.0),
+                    bm_data.get("defintra_entropy", 1.0),
+                    bm_data.get("defintra_token_count", 0),
+                    bm_data.get("defintra_duration_ms", 0.0),
+                    bm_data.get("naive_req_count", 0),
+                    bm_data.get("naive_token_count", 0),
+                    bm_data.get("naive_duration_ms", 0.0),
+                    bm_data.get("comparison_summary", ""),
+                    bm_data["created_at"],
+                ),
+            )
+            conn.commit()
+
+    def get_benchmarks(self, project_id: Optional[str] = None, limit: int = 20) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            if project_id:
+                rows = conn.execute(
+                    "SELECT * FROM benchmarks WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+                    (project_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM benchmarks ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+

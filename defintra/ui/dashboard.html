@@ -389,6 +389,9 @@
       <button class="nav-tab" onclick="switchTab('graph')">Knowledge Graph</button>
       <button class="nav-tab" onclick="switchTab('requirements')">EARS Specs</button>
       <button class="nav-tab" onclick="switchTab('decisions')">Decision Ledger</button>
+      <button class="nav-tab" onclick="switchTab('policy')">Policy Engine</button>
+      <button class="nav-tab" onclick="switchTab('events')">AI Team Events</button>
+      <button class="nav-tab" onclick="switchTab('benchmarks')">Benchmarks</button>
       <button class="nav-tab" onclick="switchTab('conflicts')">Conflicts</button>
       <button class="nav-tab" onclick="switchTab('questioning')">Adaptive Questioning</button>
       <button class="nav-tab" onclick="switchTab('compiler')">Context Studio</button>
@@ -707,6 +710,61 @@
           <div class="text-muted text-base">Running system diagnosis...</div>
         </div>
       </div>
+    <!-- 15. POLICY ENGINE TAB -->
+    <section id="tab-policy" class="tab-content">
+      <div class="flex-row-between mb-4">
+        <div>
+          <h2 class="text-lg">Autonomous Agent Policy & Governance Engine (§45)</h2>
+          <div class="text-sm text-muted">Risk-tiered action governance, security boundaries, and authorization rules</div>
+        </div>
+        <div class="flex-gap-1">
+          <button class="btn btn-secondary" onclick="loadPolicies()">↻ Refresh Policies</button>
+        </div>
+      </div>
+      <div class="glass-card mb-4">
+        <div class="card-title">Configured Governance Rules</div>
+        <div id="policiesList" class="item-list mt-3">
+          <div class="text-muted text-base">Loading policies...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 16. AI TEAM EVENT STREAM TAB -->
+    <section id="tab-events" class="tab-content">
+      <div class="flex-row-between mb-4">
+        <div>
+          <h2 class="text-lg">Multi-Agent Coordination & Event Stream (§17, §20)</h2>
+          <div class="text-sm text-muted">Chronological immutable event ledger of task dispatching, retries, and execution output</div>
+        </div>
+        <div class="flex-gap-1">
+          <button class="btn btn-secondary" onclick="loadEvents()">↻ Refresh Events</button>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-title">Live Coordination Timeline</div>
+        <div id="eventsList" class="item-list mt-3">
+          <div class="text-muted text-base">Loading structured events...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 17. BENCHMARKS TAB -->
+    <section id="tab-benchmarks" class="tab-content">
+      <div class="flex-row-between mb-4">
+        <div>
+          <h2 class="text-lg">Empirical Intelligence Benchmarks (§40, §46 V0)</h2>
+          <div class="text-sm text-muted">Defintra structured graph intelligence vs naive prompt baseline comparisons</div>
+        </div>
+        <div class="flex-gap-1">
+          <button class="btn btn-secondary" onclick="loadBenchmarks()">↻ Refresh Benchmarks</button>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-title">Historical Benchmark Runs</div>
+        <div id="benchmarksList" class="item-list mt-3">
+          <div class="text-muted text-base">Loading benchmark history...</div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -745,6 +803,9 @@
       if (tabId === 'staleness') loadStaleness();
       if (tabId === 'improvements') loadImprovements();
       if (tabId === 'recovery') loadRecovery();
+      if (tabId === 'policy') loadPolicies();
+      if (tabId === 'events') loadEvents();
+      if (tabId === 'benchmarks') loadBenchmarks();
     }
 
     async function loadState() {
@@ -1136,6 +1197,97 @@
           `).join('');
         } else {
           list.innerHTML = '<div style="color: var(--accent-green); font-size: 0.9rem;">✓ Zero systemic failure modes detected. System architecture is aligned.</div>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadPolicies() {
+      try {
+        const res = await fetch('/api/policies');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = document.getElementById('policiesList');
+        if (data.policies && data.policies.length > 0) {
+          list.innerHTML = data.policies.map(p => {
+            const color = p.decision === 'ALLOW' ? 'var(--accent-green)' : (p.decision === 'DENY' ? 'var(--accent-red)' : 'var(--accent-amber)');
+            const tagClass = p.decision === 'ALLOW' ? 'tag-state' : (p.decision === 'DENY' ? 'tag-critical' : 'tag-high');
+            return `
+              <div class="item-card" style="border-left: 3px solid ${color}; margin-bottom: 0.75rem;">
+                <div class="item-header">
+                  <span style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 1rem;">${p.action_type}</span>
+                  <span class="tag ${tagClass}">${p.decision}</span>
+                </div>
+                <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${p.description}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">
+                  <strong>Risk Tier:</strong> ${p.risk_level} | <strong>Required Approval:</strong> ${p.required_approval}
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--text-muted);">No governance policies found.</div>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadEvents() {
+      try {
+        const res = await fetch('/api/events');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = document.getElementById('eventsList');
+        if (data.events && data.events.length > 0) {
+          list.innerHTML = data.events.map(e => `
+            <div class="item-card" style="border-left: 3px solid var(--accent-cyan); margin-bottom: 0.75rem;">
+              <div class="item-header">
+                <span style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 0.95rem;">${e.event_type}</span>
+                <span class="tag tag-pattern">${e.actor_role}</span>
+              </div>
+              <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${e.summary}</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.4rem;">
+                ${e.created_at} | Event ID: ${e.id}
+              </div>
+              ${e.data?.execution_output_snippet ? `
+                <pre class="code-block" style="max-height: 120px; font-size: 0.78rem;">${e.data.execution_output_snippet}</pre>
+              ` : ''}
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--text-muted);">No multi-agent coordination events recorded yet. Run `defintra team` to dispatch agent tasks.</div>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadBenchmarks() {
+      try {
+        const res = await fetch('/api/benchmarks');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = document.getElementById('benchmarksList');
+        if (data.benchmarks && data.benchmarks.length > 0) {
+          list.innerHTML = data.benchmarks.map(b => `
+            <div class="item-card" style="border-left: 3px solid var(--accent-green); margin-bottom: 0.75rem;">
+              <div class="item-header">
+                <span style="font-weight: 700; color: #fff; font-family: var(--font-mono);">${b.id}</span>
+                <span class="tag tag-state">Health: ${b.defintra_health_score}%</span>
+              </div>
+              <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;"><strong>Input:</strong> ${b.input_summary}</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.4rem;">
+                <strong>Defintra:</strong> ${b.defintra_req_count} reqs (${b.defintra_token_count} tokens, ${b.defintra_duration_ms}ms) vs <strong>Naive:</strong> ${b.naive_req_count} reqs (${b.naive_token_count} tokens, ${b.naive_duration_ms}ms)
+              </div>
+              <div style="font-size: 0.8rem; color: var(--accent-cyan); background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 4px;">
+                ${b.comparison_summary}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--text-muted);">No benchmark history found. Run `defintra benchmark run --input &lt;file&gt;` to generate empirical comparisons.</div>';
         }
       } catch (err) {
         console.error(err);

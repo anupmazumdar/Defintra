@@ -271,3 +271,65 @@ class PolicyEngine:
                 ),
             )
             conn.commit()
+
+    @staticmethod
+    def infer_action_from_task(task_description: str) -> str:
+        """
+        Infers the canonical policy action from a task description (§45).
+        Defaults to 'read_repository' (ALLOW) for safe architectural analysis/design tasks,
+        and matches specific governed actions when critical keywords are detected.
+        """
+        task_lower = task_description.lower()
+        if any(w in task_lower for w in ["delete production data", "drop table", "truncate", "destroy database", "wipe data"]):
+            return PolicyAction.DELETE_PRODUCTION_DATA.value
+        elif any(w in task_lower for w in ["deploy", "release to prod", "production deployment", "promote to production"]):
+            return PolicyAction.DEPLOY.value
+        elif any(w in task_lower for w in ["terraform", "kubernetes", "provision infrastructure", "cloud resource", "aws", "gcp", "azure"]):
+            return PolicyAction.MODIFY_INFRASTRUCTURE.value
+        elif any(w in task_lower for w in ["read secret", "env secret", "api key", "access token", "credentials", "access_secret"]):
+            return PolicyAction.ACCESS_SECRET.value
+        elif any(w in task_lower for w in ["run shell", "bash", "execute shell", "terminal command", "exec "]):
+            return PolicyAction.EXECUTE_SHELL.value
+        elif any(w in task_lower for w in ["pip install", "npm install", "install package", "add dependency"]):
+            return PolicyAction.INSTALL_PACKAGE.value
+        elif any(w in task_lower for w in ["execute migration", "apply migration", "database migration", "schema migration", "alter table"]):
+            return PolicyAction.ACCESS_DATABASE.value
+        elif any(w in task_lower for w in ["http request", "fetch url", "access internet", "outbound network"]):
+            return PolicyAction.ACCESS_INTERNET.value
+        elif any(w in task_lower for w in ["build", "implement", "modify", "write", "patch", "create file", "code"]):
+            return PolicyAction.MODIFY_FILE.value
+        elif any(w in task_lower for w in ["read", "inspect", "scan", "view", "analyze", "design", "evaluate"]):
+            return PolicyAction.READ_REPOSITORY.value
+        return PolicyAction.READ_REPOSITORY.value
+
+    def enforce_action(
+        self,
+        project_id: str,
+        action_type: str,
+        approved_by: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> tuple[bool, str, PolicyDecision]:
+        """
+        Enforces governance policy for an action (§45).
+        Returns (is_allowed, rationale_message, policy_decision).
+        Blocks action on DENY, requires approved_by on REQUIRES_APPROVAL, allows on ALLOW.
+        """
+        decision = self.evaluate_action(project_id, action_type, context=context)
+
+        # 1. DENY
+        if decision.decision == PolicyDecisionType.DENY:
+            reason = f"POLICY BLOCKED (DENY): Action '{action_type}' is prohibited. Rationale: {decision.reason}"
+            return False, reason, decision
+
+        # 2. REQUIRES_APPROVAL
+        if decision.decision == PolicyDecisionType.REQUIRES_APPROVAL:
+            if approved_by and approved_by.strip():
+                reason = f"POLICY APPROVED: Action '{action_type}' permitted with authorization from '{approved_by}' ({decision.required_approval.value} tier)."
+                return True, reason, decision
+            else:
+                reason = f"POLICY REQUIRES APPROVAL: Action '{action_type}' requires '{decision.required_approval.value}' approval. Provide --approved-by <name> to execute."
+                return False, reason, decision
+
+        # 3. ALLOW
+        reason = f"POLICY ALLOWED: Action '{action_type}' permitted automatically ({decision.risk_level.value} risk)."
+        return True, reason, decision
