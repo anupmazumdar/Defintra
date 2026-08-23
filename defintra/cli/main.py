@@ -1072,14 +1072,15 @@ def gate(
 
     from defintra.core.sandbox.manager import SandboxManager
     sbx = SandboxManager(db)
-    res = sbx.evaluate_pre_production_gate(project.id, task_id=task_id)
+    sandbox = sbx.create_sandbox(project.id, task_id=task_id)
+    res = sbx.validate_governance_gate(project.id, sandbox)
 
     color = "green" if res["ready_for_merge"] else "yellow"
     console.print(
         Panel(
             f"[bold]Project:[/bold] {project.name}\n"
             f"[bold]Pre-Production Release Gate:[/bold] [{color}]{'APPROVED / READY' if res['ready_for_merge'] else 'ACTION REQUIRED'}[/]\n\n"
-            + "\n".join([f"  {'[green]✓[/green]' if v else '[red]✗[/red]'} {k}" for k, v in res["checks"].items()]),
+            + "\n".join([f"  {'[green][PASS][/green]' if v else '[red][FAIL][/red]'} {k}" for k, v in res["checks"].items()]),
             title="Pre-Production Deployment Governance Gate (§29)",
             border_style=color,
         )

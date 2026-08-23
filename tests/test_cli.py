@@ -136,3 +136,111 @@ def test_cli_expanded_commands(monkeypatch):
     finally:
         gc.collect()
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_cli_governance_and_new_commands(monkeypatch):
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_file = os.path.join(tmpdir, "project.db")
+        monkeypatch.setattr("defintra.cli.main.get_db", lambda: __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file))
+
+        # 1. Initialize healthy project with low entropy
+        runner.invoke(app, ["init", "Gov Suite App"])
+        runner.invoke(app, ["analyze", "Build an offline-first mobile app for college attendance."])
+
+        db = __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file)
+        proj = db.get_first_project()
+        decs = db.get_decisions(proj.id)
+        first_dec_id = decs[0].id if decs else "D-001"
+
+        # Test ADR command (Success & Failure)
+        res_adr_all = runner.invoke(app, ["adr", "--out", os.path.join(tmpdir, "adr")])
+        assert res_adr_all.exit_code == 0
+        assert "Architecture Decision Records" in res_adr_all.output
+
+        res_adr_single = runner.invoke(app, ["adr", "--id", first_dec_id])
+        assert res_adr_single.exit_code == 0
+        assert "Multi-Dimensional Evaluation Matrix" in res_adr_single.output
+
+        # Test Schedule command
+        res_sched = runner.invoke(app, ["schedule"])
+        assert res_sched.exit_code == 0
+        assert "Multi-Agent Implementation Roadmap" in res_sched.output
+        assert "Phase 1" in res_sched.output
+
+        # Test Contracts command
+        res_contracts = runner.invoke(app, ["contracts"])
+        assert res_contracts.exit_code == 0
+        assert "Shared Component Contracts" in res_contracts.output
+
+        # Test Staleness command (Success, Revalidate Success, Revalidate Failure)
+        res_stale = runner.invoke(app, ["staleness"])
+        assert res_stale.exit_code == 0
+        assert "Confidence Decay & Staleness Report" in res_stale.output
+
+        res_reval_ok = runner.invoke(app, ["staleness", "--revalidate", first_dec_id])
+        assert res_reval_ok.exit_code == 0
+        assert "successfully re-validated" in res_reval_ok.output
+
+        res_reval_fail = runner.invoke(app, ["staleness", "--revalidate", "NON_EXISTENT_NODE_XYZ"])
+        assert res_reval_fail.exit_code == 1
+        assert "not found" in res_reval_fail.output
+
+        # Test Advise command
+        res_advise = runner.invoke(app, ["advise"])
+        assert res_advise.exit_code == 0
+        assert "Post-Deployment Continuous Improvement Advisory" in res_advise.output
+
+        # Test Recover command
+        res_recover = runner.invoke(app, ["recover"])
+        assert res_recover.exit_code == 0
+        assert "System Failure Diagnosis & Recovery Engine" in res_recover.output
+
+        # Test Snapshot command (Create, List, Restore, Restore Failure)
+        res_snap_create = runner.invoke(app, ["snapshot", "--create", "v1.0.0", "--desc", "Test v1 checkpoint"])
+        assert res_snap_create.exit_code == 0
+        assert "Cryptographic Snapshot Created" in res_snap_create.output
+        assert "SHA-256 Checksum" in res_snap_create.output
+
+        res_snap_list = runner.invoke(app, ["snapshot"])
+        assert res_snap_list.exit_code == 0
+        assert "Immutable Project Snapshots" in res_snap_list.output
+
+        res_snap_restore_fail = runner.invoke(app, ["snapshot", "--restore", "non_existent_snapshot_id"])
+        assert res_snap_restore_fail.exit_code == 1
+        assert "not found" in res_snap_restore_fail.output
+
+        # Test Metrics command
+        res_metrics = runner.invoke(app, ["metrics"])
+        assert res_metrics.exit_code == 0
+        assert "Production Metrics & SLO Performance" in res_metrics.output
+        assert "Service Availability" in res_metrics.output
+
+        # Test Gate command (Happy path & Blocked path)
+        # Set entropy to 0.40 so gate check passes
+        db = __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file)
+        proj = db.get_first_project()
+        proj.spec_entropy = 0.40
+        db.save_project(proj)
+
+        res_gate_pass = runner.invoke(app, ["gate"])
+        assert res_gate_pass.exit_code == 0
+        assert "APPROVED / READY" in res_gate_pass.output
+        assert "Safe to merge and deploy" in res_gate_pass.output
+
+        # Now simulate an entropy breach > 0.60 to test Gate BLOCKED path
+        proj.spec_entropy = 0.85
+        db.save_project(proj)
+
+        res_gate_block = runner.invoke(app, ["gate"])
+        assert res_gate_block.exit_code == 1
+        assert "ACTION REQUIRED" in res_gate_block.output
+        assert "Release blocked by governance policies" in res_gate_block.output
+
+        # Test failure case on missing project
+        res_gate_no_proj = runner.invoke(app, ["gate", "--project", "non_existent_proj_id"])
+        assert res_gate_no_proj.exit_code == 1
+    finally:
+        gc.collect()
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
