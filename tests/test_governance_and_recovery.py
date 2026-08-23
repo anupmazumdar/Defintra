@@ -78,3 +78,36 @@ def test_mcp_extended_tools(test_db, tmp_path):
     # 3. Diagnose recovery tool
     rec_res = mcp_server.diagnose_recovery(project.id)
     assert "system_health_status" in rec_res
+
+
+def test_snapshot_manager(test_db, tmp_path):
+    from defintra.core.governance.snapshot import SnapshotManager
+    engine = DiscoveryEngine(test_db)
+    project = engine.run_fast_path("Snapshot Demo", "Build cloud CRM portal")
+
+    snap_mgr = SnapshotManager(test_db, storage_dir=str(tmp_path / "snapshots"))
+    snap = snap_mgr.create_snapshot(project.id, version_tag="v1.0.0", description="Initial release")
+
+    assert snap.version_tag == "v1.0.0"
+    assert len(snap.checksum) == 64  # SHA-256
+    assert snap.snapshot_id.startswith("snap_v1_0_0_")
+
+    all_snaps = snap_mgr.list_snapshots(project.id)
+    assert len(all_snaps) == 1
+
+    restored = snap_mgr.restore_snapshot(snap.snapshot_id)
+    assert restored is True
+
+
+def test_production_metrics_tracker(test_db):
+    from defintra.core.operations.metrics import ProductionMetricsTracker
+    engine = DiscoveryEngine(test_db)
+    project = engine.run_fast_path("Metrics Demo", "Build high scale API gateway")
+
+    tracker = ProductionMetricsTracker(test_db)
+    rep = tracker.evaluate_production_health(project.id)
+
+    assert rep.overall_status in ["HEALTHY", "DEGRADED", "BREACHED"]
+    assert len(rep.metrics) == 4
+    assert rep.slo_compliance_rate >= 0.0
+

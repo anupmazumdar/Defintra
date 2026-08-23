@@ -953,6 +953,145 @@ def contracts(
     console.print(table)
 
 
+@app.command()
+def snapshot(
+    create_tag: Optional[str] = typer.Option(None, "--create", "-c", help="Create a new immutable snapshot with version tag (e.g. v1.0.0)"),
+    restore_id: Optional[str] = typer.Option(None, "--restore", "-r", help="Restore project state from a snapshot ID"),
+    description: str = typer.Option("Release checkpoint", "--desc", "-d", help="Description for snapshot"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Manage cryptographic SHA-256 project snapshots, release tags, and rollbacks (§29, §49).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.governance.snapshot import SnapshotManager
+    mgr = SnapshotManager(db)
+
+    if create_tag:
+        snap = mgr.create_snapshot(project.id, version_tag=create_tag, description=description)
+        console.print(
+            Panel(
+                f"[bold]Snapshot ID:[/bold] {snap.snapshot_id}\n"
+                f"[bold]Version Tag:[/bold] {snap.version_tag}\n"
+                f"[bold]SHA-256 Checksum:[/bold] [dim]{snap.checksum}[/dim]\n"
+                f"[bold]Description:[/bold] {snap.description}",
+                title="Cryptographic Snapshot Created (§49)",
+                border_style="green",
+            )
+        )
+        return
+
+    if restore_id:
+        success = mgr.restore_snapshot(restore_id)
+        if success:
+            console.print(f"[bold green]Successfully restored project state from snapshot '{restore_id}'![/bold green]")
+        else:
+            console.print(f"[bold red]Snapshot '{restore_id}' not found.[/bold red]")
+            raise typer.Exit(1)
+        return
+
+    snapshots = mgr.list_snapshots(project.id)
+    if not snapshots:
+        console.print("[yellow]No snapshots recorded yet. Run `defintra snapshot --create v1.0.0` to save a release tag.[/yellow]")
+        return
+
+    table = Table(title="Immutable Project Snapshots & Release Lineage (§49)")
+    table.add_column("Snapshot ID", style="cyan")
+    table.add_column("Version", style="green")
+    table.add_column("Checksum (SHA-256)", style="dim")
+    table.add_column("Description", style="white")
+    table.add_column("Date", style="magenta")
+
+    for s in snapshots:
+        table.add_row(s["snapshot_id"], s["version_tag"], s["checksum"][:16] + "...", s["description"], s["created_at"][:19])
+
+    console.print(table)
+
+
+@app.command()
+def metrics(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Monitor production operational metrics, SLO compliance, and component health (§30).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.operations.metrics import ProductionMetricsTracker
+    tracker = ProductionMetricsTracker(db)
+    rep = tracker.evaluate_production_health(project.id)
+
+    color = "green" if rep.overall_status == "HEALTHY" else ("yellow" if rep.overall_status == "DEGRADED" else "red")
+    console.print(
+        Panel(
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]Operational Health Status:[/bold] [{color}]{rep.overall_status}[/]\n"
+            f"[bold]Overall SLO Compliance Rate:[/bold] [{color}]{rep.slo_compliance_rate}%[/]",
+            title="Production Metrics & SLO Performance (§30)",
+            border_style=color,
+        )
+    )
+
+    table = Table(title="Production Service Level Objectives (SLOs)")
+    table.add_column("SLO Metric", style="cyan")
+    table.add_column("Current", style="white")
+    table.add_column("Target", style="magenta")
+    table.add_column("Status", style="green")
+    table.add_column("Focal Component", style="dim")
+
+    for m in rep.metrics:
+        status_tag = "[green]COMPLIANT[/green]" if m.is_compliant else "[red]BREACHED[/red]"
+        table.add_row(m.name, f"{m.current_value}{m.unit}", f"{m.target_value}{m.unit}", status_tag, m.affected_component)
+
+    console.print(table)
+
+
+@app.command()
+def gate(
+    task_id: str = typer.Option("production_release", "--task", "-t", help="Task ID to gate"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Evaluate pre-production deployment governance gates and release readiness (§29).
+    Exits with code 0 if ready for merge/deploy, or code 1 if blocked.
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.sandbox.manager import SandboxManager
+    sbx = SandboxManager(db)
+    res = sbx.evaluate_pre_production_gate(project.id, task_id=task_id)
+
+    color = "green" if res["ready_for_merge"] else "yellow"
+    console.print(
+        Panel(
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]Pre-Production Release Gate:[/bold] [{color}]{'APPROVED / READY' if res['ready_for_merge'] else 'ACTION REQUIRED'}[/]\n\n"
+            + "\n".join([f"  {'[green]✓[/green]' if v else '[red]✗[/red]'} {k}" for k, v in res["checks"].items()]),
+            title="Pre-Production Deployment Governance Gate (§29)",
+            border_style=color,
+        )
+    )
+
+    if not res["ready_for_merge"]:
+        console.print("[bold red]Release blocked by governance policies. Resolve failing checks before merge.[/bold red]")
+        raise typer.Exit(1)
+    else:
+        console.print("[bold green]All pre-production criteria satisfied! Safe to merge and deploy.[/bold green]")
+
+
 @app.command(name="ui")
 def launch_ui(
     port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
