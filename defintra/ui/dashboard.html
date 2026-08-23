@@ -338,6 +338,37 @@
       font-size: 0.85rem;
       margin-top: 2rem;
     }
+
+    /* Utility Classes */
+    .text-xs { font-size: 0.75rem; }
+    .text-sm { font-size: 0.85rem; }
+    .text-base { font-size: 0.95rem; }
+    .text-lg { font-size: 1.25rem; }
+    .text-xl { font-size: 1.35rem; }
+    .text-muted { color: var(--text-muted); }
+    .text-white { color: #fff; }
+    .text-amber { color: var(--accent-amber); }
+    .text-green { color: var(--accent-green); }
+    .text-cyan { color: var(--accent-cyan); }
+    .font-mono { font-family: var(--font-mono); }
+    .font-bold { font-weight: 600; }
+    .mt-1 { margin-top: 0.25rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-3 { margin-top: 0.75rem; }
+    .mt-4 { margin-top: 1rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-3 { margin-bottom: 0.75rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .mb-6 { margin-bottom: 1.5rem; }
+    .flex-row-between { display: flex; justify-content: space-between; align-items: center; }
+    .flex-gap-1 { display: flex; gap: 0.5rem; }
+    .flex-gap-2 { display: flex; gap: 0.75rem; }
+    .flex-gap-3 { display: flex; gap: 1rem; }
+    .flex-1 { flex: 1; }
+    .compiler-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-top: 0.75rem; }
+    .hidden { display: none; }
+    .line-height-15 { line-height: 1.5; }
+    .line-height-16 { line-height: 1.6; }
   </style>
 </head>
 <body>
@@ -347,7 +378,7 @@
       <div class="brand-logo">D</div>
       <div>
         <div class="brand-title">Defintra Control Center</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">Define · Validate · Compile · Build</div>
+        <div class="text-xs text-muted">Define · Validate · Compile · Build</div>
       </div>
       <div id="projectBadge" class="project-badge">Loading...</div>
     </div>
@@ -377,12 +408,12 @@
         <div class="glass-card">
           <div class="card-title">Spec Health & Entropy</div>
           <div class="health-gauge-container">
-            <div id="gaugeCircle" class="gauge-circle" style="--health: 0;">
+            <div id="gaugeCircle" class="gauge-circle">
               <span id="healthPercent" class="gauge-value">--%</span>
             </div>
             <div>
-              <div style="font-size: 0.85rem; color: var(--text-muted);">Entropy: <span id="entropyScore" style="color: #fff; font-family: var(--font-mono); font-weight: 600;">--</span></div>
-              <div id="healthBadge" style="margin-top: 0.4rem; font-size: 0.75rem; font-weight: 600;" class="tag tag-state">ANALYZING</div>
+              <div class="text-sm text-muted">Entropy: <span id="entropyScore" class="text-white font-mono font-bold">--</span></div>
+              <div id="healthBadge" class="tag tag-state mt-1 text-xs font-bold">ANALYZING</div>
             </div>
           </div>
         </div>
@@ -390,57 +421,57 @@
         <div class="glass-card">
           <div class="card-title">Project Requirements</div>
           <div class="metric-number" id="countReqs">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Formal EARS statements</div>
+          <div class="text-sm text-muted mt-1">Formal EARS statements</div>
         </div>
 
         <div class="glass-card">
           <div class="card-title">Approved Decisions</div>
           <div class="metric-number" id="countDecs">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Preserved rationale & alternatives</div>
+          <div class="text-sm text-muted mt-1">Preserved rationale & alternatives</div>
         </div>
 
         <div class="glass-card">
           <div class="card-title">Open Unknowns</div>
-          <div class="metric-number" id="countUnks" style="color: var(--accent-amber);">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Pending question loop</div>
+          <div class="metric-number text-amber" id="countUnks">0</div>
+          <div class="text-sm text-muted mt-1">Pending question loop</div>
         </div>
       </div>
 
-      <div class="glass-card" style="margin-bottom: 1.5rem;">
+      <div class="glass-card mb-6">
         <div class="card-title">Project Intent & Objective</div>
-        <h2 id="projName" style="font-size: 1.35rem; margin-bottom: 0.5rem; color: #fff;">--</h2>
-        <p id="projObjective" style="color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">--</p>
+        <h2 id="projName" class="text-xl mb-2 text-white">--</h2>
+        <p id="projObjective" class="text-muted line-height-16 text-base">--</p>
       </div>
 
       <div class="glass-card">
         <div class="card-title">Spec Health Penalties & Gaps</div>
-        <div id="penaltiesList" class="item-list" style="margin-top: 0.75rem;">
-          <div style="color: var(--text-muted); font-size: 0.9rem;">No penalties currently reported.</div>
+        <div id="penaltiesList" class="item-list mt-3">
+          <div class="text-muted text-base">No penalties currently reported.</div>
         </div>
       </div>
     </section>
 
     <!-- 2. KNOWLEDGE GRAPH TAB -->
     <section id="tab-graph" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="flex-row-between mb-4">
         <div>
-          <h2 style="font-size: 1.25rem;">Interactive Knowledge Graph Visualizer</h2>
-          <div style="font-size: 0.85rem; color: var(--text-muted);">Real-time topology of requirements, decisions, contracts, and dependencies</div>
+          <h2 class="text-lg">Interactive Knowledge Graph Visualizer</h2>
+          <div class="text-sm text-muted">Real-time topology of requirements, decisions, contracts, and dependencies</div>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
+        <div class="flex-gap-1">
           <button class="btn btn-secondary" onclick="renderGraph()">↻ Refresh Graph</button>
         </div>
       </div>
       <canvas id="graphCanvas" width="1200" height="520"></canvas>
       
-      <div class="glass-card" style="margin-top: 1.25rem;">
+      <div class="glass-card mt-4">
         <div class="card-title">Blast Radius Impact Simulator</div>
-        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-          <input id="blastNodeId" class="input-field" placeholder="Enter Node ID (e.g. D-001, REQ-001)" style="flex: 1;">
+        <div class="flex-gap-3 mt-2">
+          <input id="blastNodeId" class="input-field flex-1" placeholder="Enter Node ID (e.g. D-001, REQ-001)">
           <button class="btn" onclick="simulateBlastRadius()">Simulate Impact</button>
         </div>
-        <div id="blastResults" style="margin-top: 1rem; display: none;">
-          <div id="blastSummary" style="font-size: 0.9rem; margin-bottom: 0.5rem; color: #fff;"></div>
+        <div id="blastResults" class="mt-4 hidden">
+          <div id="blastSummary" class="text-base mb-2 text-white"></div>
           <pre id="blastJson" class="code-block"></pre>
         </div>
       </div>
@@ -448,51 +479,51 @@
 
     <!-- 3. EARS SPECS TAB -->
     <section id="tab-requirements" class="tab-content">
-      <div style="margin-bottom: 1rem;">
-        <h2 style="font-size: 1.25rem;">Formal EARS Requirements</h2>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">Easy Approach to Requirements Syntax (Ubiquitous, Event-driven, State-driven, Optional, Unwanted)</div>
+      <div class="mb-4">
+        <h2 class="text-lg">Formal EARS Requirements</h2>
+        <div class="text-sm text-muted">Easy Approach to Requirements Syntax (Ubiquitous, Event-driven, State-driven, Optional, Unwanted)</div>
       </div>
       <div id="reqsList" class="item-list"></div>
     </section>
 
     <!-- 4. DECISION LEDGER TAB -->
     <section id="tab-decisions" class="tab-content">
-      <div style="margin-bottom: 1rem;">
-        <h2 style="font-size: 1.25rem;">Architectural Decision Ledger</h2>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">Accepted choices with preserved disagreement and rejected alternatives</div>
+      <div class="mb-4">
+        <h2 class="text-lg">Architectural Decision Ledger</h2>
+        <div class="text-sm text-muted">Accepted choices with preserved disagreement and rejected alternatives</div>
       </div>
       <div id="decsList" class="item-list"></div>
     </section>
 
     <!-- 5. CONFLICTS TAB -->
     <section id="tab-conflicts" class="tab-content">
-      <div style="margin-bottom: 1rem;">
-        <h2 style="font-size: 1.25rem;">Conflict & Contradiction Resolution Center</h2>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">Detects contradictions between requirements and architecture</div>
+      <div class="mb-4">
+        <h2 class="text-lg">Conflict & Contradiction Resolution Center</h2>
+        <div class="text-sm text-muted">Detects contradictions between requirements and architecture</div>
       </div>
       <div id="conflictsList" class="item-list"></div>
     </section>
 
     <!-- 6. ADAPTIVE QUESTIONING TAB -->
     <section id="tab-questioning" class="tab-content">
-      <div style="margin-bottom: 1rem;">
-        <h2 style="font-size: 1.25rem;">Adaptive Questioning & Entropy Reduction Loop</h2>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">Answer open unknowns to systematically reduce spec ambiguity</div>
+      <div class="mb-4">
+        <h2 class="text-lg">Adaptive Questioning & Entropy Reduction Loop</h2>
+        <div class="text-sm text-muted">Answer open unknowns to systematically reduce spec ambiguity</div>
       </div>
       <div id="unknownsList" class="item-list"></div>
     </section>
 
     <!-- 7. CONTEXT COMPILER STUDIO TAB -->
     <section id="tab-compiler" class="tab-content">
-      <div class="glass-card" style="margin-bottom: 1.5rem;">
+      <div class="glass-card mb-6">
         <div class="card-title">Minimum Sufficient Context Studio</div>
-        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+        <div class="compiler-grid">
           <div>
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Task Description</label>
+            <label class="text-xs text-muted">Task Description</label>
             <input id="compileTask" class="input-field" value="Build user authentication endpoint">
           </div>
           <div>
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Target AI Role</label>
+            <label class="text-xs text-muted">Target AI Role</label>
             <select id="compileRole" class="select-field">
               <option value="BACKEND_ENGINEER">Backend Engineer</option>
               <option value="FRONTEND_ENGINEER">Frontend Engineer</option>
@@ -503,7 +534,7 @@
             </select>
           </div>
           <div>
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Target Model Format</label>
+            <label class="text-xs text-muted">Target Model Format</label>
             <select id="compileTarget" class="select-field">
               <option value="CLAUDE">Claude (XML tags)</option>
               <option value="MARKDOWN">OpenAI (Markdown)</option>
@@ -512,7 +543,7 @@
             </select>
           </div>
         </div>
-        <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+        <div class="flex-gap-2 mt-4">
           <button class="btn" onclick="compileContext()">Compile Minimal Context</button>
           <button class="btn btn-secondary" onclick="copyCompiledText()">📋 Copy to Clipboard</button>
         </div>
@@ -526,12 +557,12 @@
 
     <!-- 8. QA & TEST PACKS TAB -->
     <section id="tab-testing" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="flex-row-between mb-4">
         <div>
-          <h2 style="font-size: 1.25rem;">QA & Test Packs Generator</h2>
-          <div style="font-size: 0.85rem; color: var(--text-muted);">Human QA walkthroughs and executable Pytest suites mapped 1:1 to EARS requirements</div>
+          <h2 class="text-lg">QA & Test Packs Generator</h2>
+          <div class="text-sm text-muted">Human QA walkthroughs and executable Pytest suites mapped 1:1 to EARS requirements</div>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
+        <div class="flex-gap-1">
           <button class="btn btn-secondary" onclick="loadTestPack('human')">Human QA Checklist</button>
           <button class="btn btn-secondary" onclick="loadTestPack('automated')">Pytest Test Suite</button>
           <button class="btn btn-secondary" onclick="loadTestPack('security')">Security Regression</button>
@@ -546,13 +577,13 @@
 
     <!-- 9. INCIDENT TRACER TAB -->
     <section id="tab-incident" class="tab-content">
-      <div class="glass-card" style="margin-bottom: 1.5rem;">
+      <div class="glass-card mb-6">
         <div class="card-title">Production Incident-to-Requirement Feedback Loop</div>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        <p class="text-sm text-muted mb-3">
           Paste a production error message, stack trace, or incident summary to map it back to the originating requirements, assumptions, and contracts.
         </p>
         <textarea id="incidentInput" class="input-field" rows="4" placeholder="e.g. NullPointerException in auth_service.py:142 during token validation"></textarea>
-        <div style="margin-top: 0.75rem;">
+        <div class="mt-3">
           <button class="btn" onclick="traceIncident()">Trace Incident Root Cause</button>
         </div>
       </div>
@@ -565,12 +596,12 @@
 
     <!-- 10. OPERATIONS & RUNBOOKS TAB -->
     <section id="tab-operations" class="tab-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="flex-row-between mb-4">
         <div>
-          <h2 style="font-size: 1.25rem;">Operations & Maintenance Runbooks</h2>
-          <div style="font-size: 0.85rem; color: var(--text-muted);">Automated procedures for database backup, failover, disaster recovery, and rollback</div>
+          <h2 class="text-lg">Operations & Maintenance Runbooks</h2>
+          <div class="text-sm text-muted">Automated procedures for database backup, failover, disaster recovery, and rollback</div>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
+        <div class="flex-gap-1">
           <button class="btn btn-secondary" onclick="loadRunbook('backup')">Backup</button>
           <button class="btn btn-secondary" onclick="loadRunbook('failover')">Failover</button>
           <button class="btn btn-secondary" onclick="loadRunbook('disaster_recovery')">Disaster Recovery</button>
@@ -586,31 +617,31 @@
 
     <!-- 11. STABILITY BUDGET TAB -->
     <section id="tab-stability" class="tab-content">
-      <div style="margin-bottom: 1rem;">
-        <h2 style="font-size: 1.25rem;">Architecture Stability & Churn Budget</h2>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">Tracks mutation velocity and warns of specification churn before deployment</div>
+      <div class="mb-4">
+        <h2 class="text-lg">Architecture Stability & Churn Budget</h2>
+        <div class="text-sm text-muted">Tracks mutation velocity and warns of specification churn before deployment</div>
       </div>
       <div class="metrics-grid">
         <div class="glass-card">
           <div class="card-title">Churn Index</div>
           <div class="metric-number" id="churnIndex">0.00</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Modifications / component count</div>
+          <div class="text-sm text-muted mt-1">Modifications / component count</div>
         </div>
         <div class="glass-card">
           <div class="card-title">High Churn Nodes</div>
-          <div class="metric-number" id="highChurnCount" style="color: var(--accent-amber);">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Frequently mutated entities</div>
+          <div class="metric-number text-amber" id="highChurnCount">0</div>
+          <div class="text-sm text-muted mt-1">Frequently mutated entities</div>
         </div>
         <div class="glass-card">
           <div class="card-title">Stability Status</div>
-          <div class="metric-number" id="stabilityStatus" style="font-size: 1.35rem; color: var(--accent-green);">HEALTHY</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Architectural drift rating</div>
+          <div class="metric-number text-xl text-green" id="stabilityStatus">HEALTHY</div>
+          <div class="text-sm text-muted mt-1">Architectural drift rating</div>
         </div>
       </div>
       <div class="glass-card">
         <div class="card-title">Node Mutation Velocity History</div>
-        <div id="stabilityList" class="item-list" style="margin-top: 0.75rem;">
-          <div style="color: var(--text-muted); font-size: 0.9rem;">No recent mutations recorded.</div>
+        <div id="stabilityList" class="item-list mt-3">
+          <div class="text-muted text-base">No recent mutations recorded.</div>
         </div>
       </div>
     </section>
@@ -621,37 +652,37 @@
         <div class="glass-card">
           <div class="card-title">System Staleness Score</div>
           <div class="metric-number" id="stalenessScore">0.00</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">0.0 (Fresh) to 1.0 (Stale)</div>
+          <div class="text-sm text-muted mt-1">0.0 (Fresh) to 1.0 (Stale)</div>
         </div>
         <div class="glass-card">
           <div class="card-title">Average Confidence</div>
-          <div class="metric-number" id="avgConfidence" style="color: var(--accent-cyan);">1.00</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Derived from evidence & decay</div>
+          <div class="metric-number text-cyan" id="avgConfidence">1.00</div>
+          <div class="text-sm text-muted mt-1">Derived from evidence & decay</div>
         </div>
         <div class="glass-card">
           <div class="card-title">Stale Nodes Detected</div>
-          <div class="metric-number" id="staleNodesCount" style="color: var(--accent-amber);">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Requires user / QA re-validation</div>
+          <div class="metric-number text-amber" id="staleNodesCount">0</div>
+          <div class="text-sm text-muted mt-1">Requires user / QA re-validation</div>
         </div>
       </div>
       <div class="glass-card">
         <div class="card-title">Stale / Decayed Knowledge Graph Nodes (§9)</div>
-        <div id="staleNodesList" class="item-list" style="margin-top: 0.75rem;">
-          <div style="color: var(--text-muted); font-size: 0.9rem;">Evaluating confidence decay...</div>
+        <div id="staleNodesList" class="item-list mt-3">
+          <div class="text-muted text-base">Evaluating confidence decay...</div>
         </div>
       </div>
     </section>
 
     <!-- 13. CONTINUOUS IMPROVEMENTS TAB -->
     <section id="tab-improvements" class="tab-content">
-      <div class="glass-card" style="margin-bottom: 1.5rem;">
+      <div class="glass-card mb-6">
         <div class="card-title">Post-Deployment Continuous Optimization & Advisory (§32)</div>
-        <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5;">
+        <p class="text-muted text-base line-height-15">
           Automated performance, reliability, security, and database indexing recommendations based on current architecture and incident telemetry.
         </p>
       </div>
       <div id="improvementsList" class="item-list">
-        <div style="color: var(--text-muted); font-size: 0.9rem;">Generating optimization proposals...</div>
+        <div class="text-muted text-base">Generating optimization proposals...</div>
       </div>
     </section>
 
@@ -660,19 +691,19 @@
       <div class="metrics-grid">
         <div class="glass-card">
           <div class="card-title">Diagnostic Status</div>
-          <div class="metric-number" id="recoveryHealthStatus" style="font-size: 1.35rem; color: var(--accent-green);">HEALTHY</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Systemic failure mode rating</div>
+          <div class="metric-number text-xl text-green" id="recoveryHealthStatus">HEALTHY</div>
+          <div class="text-sm text-muted mt-1">Systemic failure mode rating</div>
         </div>
         <div class="glass-card">
           <div class="card-title">Active Failures</div>
-          <div class="metric-number" id="activeFailuresCount" style="color: var(--accent-green);">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Blocking contradictions or spikes</div>
+          <div class="metric-number text-green" id="activeFailuresCount">0</div>
+          <div class="text-sm text-muted mt-1">Blocking contradictions or spikes</div>
         </div>
       </div>
       <div class="glass-card">
         <div class="card-title">Self-Healing Failure Diagnoses & Remediation Plans (§48)</div>
-        <div id="recoveryDiagnosesList" class="item-list" style="margin-top: 0.75rem;">
-          <div style="color: var(--text-muted); font-size: 0.9rem;">Running system diagnosis...</div>
+        <div id="recoveryDiagnosesList" class="item-list mt-3">
+          <div class="text-muted text-base">Running system diagnosis...</div>
         </div>
       </div>
     </section>
