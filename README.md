@@ -230,11 +230,20 @@ defintra export --rules claude   # Generates CLAUDE.md
 defintra export --rules agents   # Generates AGENTS.md
 ```
 
-### Governance, Advisory & Self-Healing Recovery
+### Governance, Architecture & Multi-Agent Scheduling
 ```bash
 # Check confidence decay and stale knowledge graph nodes (§9)
 defintra staleness
 defintra staleness --revalidate REQ-001
+
+# Generate formal Architecture Decision Records (ADRs) with trade-off matrices (§10, §11)
+defintra adr
+
+# Generate multi-phase implementation roadmap & parallel execution tracks (§13, §16)
+defintra schedule
+
+# Validate semantic contract versions & breaking changes (§12, §49)
+defintra contracts
 
 # Generate post-deployment continuous improvement advisory (§32)
 defintra advise
@@ -291,7 +300,8 @@ python -m pytest
 python -m pytest --cov=defintra tests/
 ```
 
-All **43 test suites** pass consistently across:
+All **48 test suites** pass consistently across:
+- `test_adr_and_scheduling.py` — Architecture Decision Records (ADR) & task execution scheduling
 - `test_brownfield.py` — AST & framework route ingestion
 - `test_compiler.py` — Context compilation and token pruning
 - `test_conflicts.py` — Contradiction and incompatible decision engine

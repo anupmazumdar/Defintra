@@ -395,4 +395,19 @@ class Exporter:
         ag_file.write_text(self.generate_agents_md(), encoding="utf-8")
         files_written["AGENTS.md"] = str(ag_file)
 
+        # 5. Architecture Decision Records (ADRs §10, §11)
+        from defintra.core.decisions.adr import ADRGenerator
+        adr_gen = ADRGenerator(self.db)
+        adr_written = adr_gen.export_all_adrs(self.project_id, str(out_path / "adr"))
+        for k, v in adr_written.items():
+            files_written[f"adr/{k}"] = v
+
+        # 6. Execution Schedule & Roadmap (§13, §16)
+        from defintra.core.tasks.scheduler import TaskScheduler
+        scheduler = TaskScheduler(self.db)
+        sched_rep = scheduler.schedule_project(self.project_id)
+        sched_file = out_path / "schedule.json"
+        sched_file.write_text(json.dumps(sched_rep.to_dict(), indent=2), encoding="utf-8")
+        files_written["schedule.json"] = str(sched_file)
+
         return files_written

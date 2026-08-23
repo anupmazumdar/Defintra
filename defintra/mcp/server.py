@@ -260,6 +260,34 @@ class DefintraMCPServer:
         rep = engine.diagnose_project(project.id)
         return rep.to_dict()
 
+    def generate_adrs(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        from defintra.core.decisions.adr import ADRGenerator
+        gen = ADRGenerator(self.db)
+        decs = self.db.get_decisions(project.id)
+        adrs = {d.id: gen.generate_adr(project.id, d.id) for d in decs}
+        return {"project_id": project.id, "adrs": adrs}
+
+    def schedule_phases(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        from defintra.core.tasks.scheduler import TaskScheduler
+        scheduler = TaskScheduler(self.db)
+        sched = scheduler.schedule_project(project.id)
+        return sched.to_dict()
+
+    def validate_contracts(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        from defintra.core.contracts.versioning import ContractVersioningEngine
+        engine = ContractVersioningEngine(self.db)
+        res = engine.validate_project_contracts(project.id)
+        return {"project_id": project.id, "contracts": res}
+
 
 def handle_stdio_rpc():
     """
@@ -325,6 +353,12 @@ def handle_stdio_rpc():
                 res = server.get_improvements(params.get("project_id"))
             elif method == "diagnose_recovery":
                 res = server.diagnose_recovery(params.get("project_id"))
+            elif method == "generate_adrs":
+                res = server.generate_adrs(params.get("project_id"))
+            elif method == "schedule_phases":
+                res = server.schedule_phases(params.get("project_id"))
+            elif method == "validate_contracts":
+                res = server.validate_contracts(params.get("project_id"))
             else:
                 res = {"error": f"Unknown method '{method}'"}
 

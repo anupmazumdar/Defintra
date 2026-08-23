@@ -851,6 +851,108 @@ def recover(
         )
 
 
+@app.command()
+def adr(
+    decision_id: Optional[str] = typer.Option(None, "--id", "-i", help="Specific decision ID to generate ADR for"),
+    output_dir: str = typer.Option("docs/adr", "--out", "-o", help="Output directory for ADR Markdown files"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Generate formal Architecture Decision Records (ADRs) with multi-dimensional trade-off matrices (§10, §11).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.decisions.adr import ADRGenerator
+    gen = ADRGenerator(db)
+
+    if decision_id:
+        content = gen.generate_adr(project.id, decision_id)
+        console.print(Panel(content, title=f"ADR: {decision_id}", border_style="cyan"))
+        return
+
+    written = gen.export_all_adrs(project.id, output_dir)
+    console.print(f"[bold green]Exported {len(written)} Architecture Decision Records to '{output_dir}':[/bold green]")
+    for did, fpath in written.items():
+        console.print(f"  [cyan][OK][/cyan] {did} -> [dim]{fpath}[/dim]")
+
+
+@app.command()
+def schedule(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Generate implementation roadmap, critical path, and parallel AI agent execution tracks (§13, §16).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.tasks.scheduler import TaskScheduler
+    scheduler = TaskScheduler(db)
+    sched = scheduler.schedule_project(project.id)
+
+    console.print(
+        Panel(
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]Total Execution Phases:[/bold] {sched.total_phases}\n"
+            f"[bold]Parallelism Factor:[/bold] {sched.parallelism_factor} concurrent agent tracks\n"
+            f"[bold]Critical Path:[/bold] {' → '.join(sched.critical_path)}",
+            title="Multi-Agent Implementation Roadmap & Scheduler (§13, §16)",
+            border_style="cyan",
+        )
+    )
+
+    for p in sched.phases:
+        tracks_text = "\n".join([f"  [cyan]•[/cyan] {t}" for t in p.parallel_tracks])
+        console.print(
+            Panel(
+                f"[bold white]Phase {p.phase_number}: {p.name}[/bold white]\n"
+                f"[bold]Assigned AI Role:[/bold] [magenta]{p.assigned_role.value}[/magenta]\n"
+                f"[bold]Primary Focal Entities:[/bold] {', '.join(p.primary_entities)}\n\n"
+                f"[bold]Parallel Execution Tracks:[/bold]\n{tracks_text}\n\n"
+                f"[bold green]Gate Requirement:[/bold green] {p.gate_condition}",
+                title=f"Phase {p.phase_number}",
+                border_style="blue",
+            )
+        )
+
+
+@app.command()
+def contracts(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Inspect and validate semantic version compatibility across API, Database, and UI contracts (§12, §49).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.contracts.versioning import ContractVersioningEngine
+    v_engine = ContractVersioningEngine(db)
+    results = v_engine.validate_project_contracts(project.id)
+
+    table = Table(title="Shared Component Contracts & Semantic Versions (§12, §49)")
+    table.add_column("Contract ID", style="cyan", no_wrap=True)
+    table.add_column("Name", style="white")
+    table.add_column("Type", style="magenta")
+    table.add_column("SemVer", style="green")
+    table.add_column("Status", style="yellow")
+
+    for c in results:
+        table.add_row(c["contract_id"], c["name"], c["type"], c["version"], c["status"])
+
+    console.print(table)
+
+
 @app.command(name="ui")
 def launch_ui(
     port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
