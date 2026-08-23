@@ -1,11 +1,10 @@
 import tempfile
 import os
+import gc
 import pytest
 from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.mcp.server import DefintraMCPServer
 
-
-import gc
 
 @pytest.fixture
 def mcp_server():
@@ -52,7 +51,24 @@ def test_mcp_propose_decision(mcp_server):
 
 
 def test_mcp_compile_context(mcp_server):
-    ctx = mcp_server.compile_context("Implement user authentication and JWT login flow")
-    assert "included_requirements" in ctx
-    assert "explainable_exclusions" in ctx
-    assert len(ctx["included_requirements"]) >= 1
+    ctx = mcp_server.compile_context("Implement user authentication and JWT login flow", target_format="claude")
+    assert "compiled_data" in ctx
+    assert "rendered_context" in ctx
+    assert "<defintra_context>" in ctx["rendered_context"]
+
+
+def test_mcp_expanded_tools(mcp_server, tmp_path):
+    # 1. Test conflicts
+    confs = mcp_server.detect_conflicts()
+    assert isinstance(confs, list)
+
+    # 2. Test generate test pack
+    pack = mcp_server.generate_test_pack(pack_type="human")
+    assert "Human Testing Pack" in pack["content"]
+
+    # 3. Test scan repository
+    mock_sub = tmp_path / "mock_sub"
+    mock_sub.mkdir()
+    (mock_sub / "test.py").write_text("print('hello')", encoding="utf-8")
+    scan_res = mcp_server.scan_repository(str(mock_sub), name="Sub Repo")
+    assert scan_res["files_scanned"] >= 1

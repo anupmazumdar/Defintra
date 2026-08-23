@@ -31,6 +31,6 @@ env/
 .coverage
 htmlcov/
 
-# Local databases & artifacts
+# Local databases & runtime artifacts
 *.db
-.defintra/*.db
+.defintra/

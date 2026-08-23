@@ -1,23 +1,48 @@
 """
 Defintra MCP Server (§44).
-Exposes Defintra project knowledge graph, blast-radius analysis, and context compilation
-as Model Context Protocol (MCP) tools for AI assistants (Claude Code, Cursor, Antigravity).
+Exposes Defintra project knowledge graph, blast-radius analysis,
+context compilation, brownfield ingestion, conflict detection, test packs,
+AI team orchestration, incident traceback, runbooks, and stability budget
+as Model Context Protocol (MCP) tools for AI assistants.
 """
 
 import json
 import sys
 from typing import Any, Dict, List, Optional
+
+from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
+from defintra.core.brownfield.scanner import BrownfieldScanner
+from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
-from defintra.core.entropy.calculator import EntropyCalculator
-from defintra.core.graph.engine import ProjectGraph
 from defintra.core.decisions.ledger import DecisionLedger
-from defintra.core.models.entities import ApprovalLevel, ChangeRisk, RejectedAlternative, SourceType
+from defintra.core.diff.engine import SpecDiffEngine
+from defintra.core.entropy.calculator import EntropyCalculator
+from defintra.core.governance.stability import StabilityBudgetEngine
+from defintra.core.graph.engine import ProjectGraph
+from defintra.core.models.entities import (
+    ApprovalLevel,
+    ChangeRisk,
+    RejectedAlternative,
+    SourceType,
+)
+from defintra.core.operations.feedback import IncidentTracer
+from defintra.core.operations.runbooks import RunbookGenerator
+from defintra.core.team.coordinator import TeamCoordinator
+from defintra.core.testing.test_packs import TestPackGenerator
 
 
 class DefintraMCPServer:
     def __init__(self, db_path: str = ".defintra/project.db"):
         self.db = Database(db_path)
         self.decision_ledger = DecisionLedger(self.db)
+        self.compiler = ContextCompiler(self.db)
+        self.conflict_engine = ConflictEngine(self.db)
+        self.scanner = BrownfieldScanner(self.db)
+        self.test_pack_gen = TestPackGenerator(self.db)
+        self.team_coordinator = TeamCoordinator(self.db)
+        self.incident_tracer = IncidentTracer(self.db)
+        self.runbook_gen = RunbookGenerator(self.db)
+        self.stability_engine = StabilityBudgetEngine(self.db)
 
     def get_project_state(self, project_id: Optional[str] = None) -> Dict[str, Any]:
         project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
@@ -38,6 +63,7 @@ class DefintraMCPServer:
             "name": project.name,
             "objective": project.objective,
             "domain": project.domain,
+            "source_type": project.source_type,
             "health": health_report.to_dict(),
             "summary": {
                 "requirements_count": len(reqs),
@@ -100,44 +126,116 @@ class DefintraMCPServer:
             "message": f"Decision '{dec.title}' recorded in ledger as PROPOSED. Preserved {len(alts)} rejected alternative(s).",
         }
 
-    def compile_context(self, task_description: str, project_id: Optional[str] = None) -> Dict[str, Any]:
+    def compile_context(
+        self,
+        task_description: str,
+        project_id: Optional[str] = None,
+        role: str = "GENERAL",
+        target_format: str = "markdown",
+        max_tokens: int = 4000,
+    ) -> Dict[str, Any]:
         """
-        Minimum Sufficient Context Compiler (§21).
-        Provides explainable inclusion/exclusion for the specified task.
+        Minimum Sufficient Context Compiler (§21, §23).
         """
+        try:
+            agent_role = AgentRole[role.upper()]
+        except Exception:
+            agent_role = AgentRole.GENERAL
+
+        try:
+            tgt_fmt = TargetFormat[target_format.upper()]
+        except Exception:
+            tgt_fmt = TargetFormat.MARKDOWN
+
+        compiled = self.compiler.compile(
+            task_description=task_description,
+            project_id=project_id,
+            role=agent_role,
+            max_tokens=max_tokens,
+        )
+        return {
+            "compiled_data": compiled.to_dict(),
+            "rendered_context": compiled.render(tgt_fmt),
+        }
+
+    def scan_repository(self, repo_path: str, name: Optional[str] = None) -> Dict[str, Any]:
+        report = self.scanner.scan_repository(repo_path, project_name=name)
+        return report.to_dict()
+
+    def detect_conflicts(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return [{"error": "No project found"}]
+        confs = self.conflict_engine.detect_conflicts(project.id)
+        return [c.model_dump() for c in confs]
+
+    def resolve_conflict(
+        self,
+        conflict_id: str,
+        resolution_notes: str,
+        winning_entity_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        resolved = self.conflict_engine.resolve_conflict(
+            project_id=project.id,
+            conflict_id=conflict_id,
+            resolution_notes=resolution_notes,
+            winning_entity_id=winning_entity_id,
+        )
+        return resolved.model_dump()
+
+    def generate_test_pack(self, pack_type: str = "human", project_id: Optional[str] = None) -> Dict[str, Any]:
         project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
         if not project:
             return {"error": "No project found"}
 
-        reqs = self.db.get_requirements(project.id)
-        decs = self.db.get_decisions(project.id)
-        comps = self.db.get_components(project.id)
+        if pack_type.lower() == "automated":
+            content = self.test_pack_gen.generate_automated_test_scaffold(project.id)
+        elif pack_type.lower() == "security":
+            content = self.test_pack_gen.generate_security_regression_suite(project.id)
+        else:
+            content = self.test_pack_gen.generate_human_testing_pack(project.id)
 
-        task_words = set(task_description.lower().split())
+        return {"project_id": project.id, "pack_type": pack_type, "content": content}
 
-        included_reqs = []
-        excluded_reqs = []
-        for r in reqs:
-            r_words = set(r.title.lower().split() + r.description.lower().split())
-            if r.priority.value == "CRITICAL" or task_words.intersection(r_words):
-                included_reqs.append({"id": r.id, "statement": r.description, "reason": "Direct relevance or critical constraint"})
-            else:
-                excluded_reqs.append({"id": r.id, "reason": "Unrelated to immediate task keywords"})
+    def dispatch_team_task(self, task: str, role: str = "SOFTWARE_ARCHITECT", project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        try:
+            agent_role = AgentRole[role.upper()]
+        except Exception:
+            agent_role = AgentRole.SOFTWARE_ARCHITECT
 
-        included_decs = [
-            {"id": d.id, "decision": f"{d.title}: {d.decision}", "reason": "Approved architecture decision"}
-            for d in decs
-            if d.status.value == "APPROVED"
-        ]
+        return self.team_coordinator.dispatch_task(project.id, task, agent_role)
 
-        return {
-            "task": task_description,
-            "global_objective": project.objective,
-            "included_requirements": included_reqs,
-            "included_decisions": included_decs,
-            "explainable_exclusions": excluded_reqs,
-            "token_optimization_ratio": f"{len(included_reqs)}/{len(reqs)} requirements included",
-        }
+    def trace_incident(self, error_text: str, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        rep = self.incident_tracer.trace_incident(error_text, project.id)
+        return rep.to_dict()
+
+    def generate_runbook(self, runbook_type: str = "backup", project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        content = self.runbook_gen.generate_runbook(project.id, runbook_type)
+        return {"project_id": project.id, "runbook_type": runbook_type, "content": content}
+
+    def check_stability_budget(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        rep = self.stability_engine.evaluate_stability(project.id)
+        return rep.to_dict()
+
+    def diff_specifications(self, dir_a: Dict[str, Any], dir_b: Dict[str, Any]) -> Dict[str, Any]:
+        rep = SpecDiffEngine.diff_dirs(dir_a, dir_b)
+        return rep.to_dict()
 
 
 def handle_stdio_rpc():
@@ -168,7 +266,36 @@ def handle_stdio_rpc():
                     project_id=params.get("project_id"),
                 )
             elif method == "compile_context":
-                res = server.compile_context(params.get("task_description"), params.get("project_id"))
+                res = server.compile_context(
+                    task_description=params.get("task_description", ""),
+                    project_id=params.get("project_id"),
+                    role=params.get("role", "GENERAL"),
+                    target_format=params.get("target_format", "markdown"),
+                    max_tokens=params.get("max_tokens", 4000),
+                )
+            elif method == "scan_repository":
+                res = server.scan_repository(params.get("repo_path", "."), params.get("name"))
+            elif method == "detect_conflicts":
+                res = server.detect_conflicts(params.get("project_id"))
+            elif method == "resolve_conflict":
+                res = server.resolve_conflict(
+                    conflict_id=params.get("conflict_id"),
+                    resolution_notes=params.get("resolution_notes", ""),
+                    winning_entity_id=params.get("winning_entity_id"),
+                    project_id=params.get("project_id"),
+                )
+            elif method == "generate_test_pack":
+                res = server.generate_test_pack(params.get("pack_type", "human"), params.get("project_id"))
+            elif method == "dispatch_team_task":
+                res = server.dispatch_team_task(params.get("task", ""), params.get("role", "SOFTWARE_ARCHITECT"), params.get("project_id"))
+            elif method == "trace_incident":
+                res = server.trace_incident(params.get("error_text", ""), params.get("project_id"))
+            elif method == "generate_runbook":
+                res = server.generate_runbook(params.get("runbook_type", "backup"), params.get("project_id"))
+            elif method == "check_stability_budget":
+                res = server.check_stability_budget(params.get("project_id"))
+            elif method == "diff_specifications":
+                res = server.diff_specifications(params.get("dir_a", {}), params.get("dir_b", {}))
             else:
                 res = {"error": f"Unknown method '{method}'"}
 

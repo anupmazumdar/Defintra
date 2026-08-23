@@ -1,9 +1,12 @@
 """
-Defintra CLI (§38, §46 V0).
+Defintra CLI (§38, §46 V0–V7).
 Interactive command-line interface for Requirement Intelligence, EARS specs,
-Decision Ledger, Spec Health tracking, and DIR export.
+Decision Ledger, Context Compilation, Brownfield Ingestion, Conflict Engine,
+Testing Packs, Sandboxing, AI Team Orchestration, Incident Feedback, Runbooks,
+Architecture Stability Budget, and Semantic Spec Diffing.
 """
 
+import json
 from pathlib import Path
 from typing import Optional
 import typer
@@ -14,13 +17,25 @@ from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich.tree import Tree
 
+from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
 from defintra.core.audit.logger import DiscoveryAuditLogger
+from defintra.core.brownfield.scanner import BrownfieldScanner
+from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
 from defintra.core.decisions.ledger import DecisionLedger
+from defintra.core.diff.engine import SpecDiffEngine
 from defintra.core.discovery.engine import DiscoveryEngine
+from defintra.core.discovery.llm import DeepPathEngine
 from defintra.core.entropy.calculator import EntropyCalculator
+from defintra.core.governance.stability import StabilityBudgetEngine
 from defintra.core.graph.engine import ProjectGraph
+from defintra.core.operations.feedback import IncidentTracer
+from defintra.core.operations.runbooks import RunbookGenerator
+from defintra.core.sandbox.manager import SandboxManager
+from defintra.core.team.coordinator import StructuredEventType, TeamCoordinator
+from defintra.core.testing.test_packs import TestPackGenerator
 from defintra.export.exporter import Exporter
+from defintra.ui.server import start_ui_server
 
 app = typer.Typer(
     name="defintra",
@@ -65,6 +80,7 @@ def init(
 def analyze(
     input_text: str = typer.Argument(..., help="Natural language idea prompt or path to a PRD text file"),
     project_name: Optional[str] = typer.Option(None, "--name", "-n", help="Project name"),
+    deep: bool = typer.Option(False, "--deep", help="Run Deep Path recursive decomposition"),
 ):
     """
     Analyze raw human intent, parse EARS requirements, seed decisions & unknowns, and calculate spec health.
@@ -83,6 +99,13 @@ def analyze(
 
     with console.status("[bold cyan]Extracting intent, decomposing requirements into EARS, checking unknowns..."):
         project = engine.run_fast_path(p_name, raw_content)
+        if deep:
+            deep_engine = DeepPathEngine()
+            deep_reqs, deep_unks = deep_engine.decompose(project.id, raw_content)
+            for dr in deep_reqs:
+                db.save_requirement(dr)
+            for du in deep_unks:
+                db.save_unknown(du)
 
     reqs = db.get_requirements(project.id)
     decs = db.get_decisions(project.id)
@@ -157,6 +180,357 @@ def question(
             )
 
     console.print("[bold green]Questioning session completed![/bold green]")
+
+
+@app.command(name="compile")
+def compile_task(
+    task: str = typer.Argument(..., help="The specific programming task to compile context for"),
+    role: str = typer.Option("GENERAL", "--role", "-r", help="Agent role: GENERAL, BACKEND_ENGINEER, FRONTEND_ENGINEER, DATABASE_ENGINEER, SECURITY_ENGINEER, QA_ENGINEER"),
+    target: str = typer.Option("markdown", "--target", "-t", help="Target format: claude, openai, gemini, antigravity, markdown, json"),
+    tokens: int = typer.Option(4000, "--tokens", help="Maximum token budget"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Compile minimum sufficient context for AI coding agents with explainable inclusion/exclusion (§21).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    try:
+        agent_role = AgentRole[role.upper()]
+    except Exception:
+        agent_role = AgentRole.GENERAL
+
+    try:
+        tgt_fmt = TargetFormat[target.upper()]
+    except Exception:
+        tgt_fmt = TargetFormat.MARKDOWN
+
+    compiler = ContextCompiler(db)
+    with console.status("[bold cyan]Compiling minimum sufficient context..."):
+        compiled = compiler.compile(
+            task_description=task,
+            project_id=project.id,
+            role=agent_role,
+            max_tokens=tokens,
+        )
+
+    rendered_output = compiled.render(tgt_fmt)
+
+    console.print(
+        Panel(
+            f"[bold]Target Format:[/bold] {tgt_fmt.value} | [bold]Role:[/bold] {agent_role.value}\n"
+            f"[bold]Estimated Tokens:[/bold] {compiled.token_count} | [bold]Compression Ratio:[/bold] {compiled.compression_ratio:.1f}%\n"
+            f"[bold]Included Requirements:[/bold] {len(compiled.requirements)} | [bold]Included Decisions:[/bold] {len(compiled.decisions)}",
+            title="Context Compilation Metrics (§21, §23)",
+            border_style="cyan",
+        )
+    )
+    console.print(rendered_output)
+
+
+@app.command()
+def scan(
+    repo_path: str = typer.Argument(".", help="Path to existing codebase directory to scan"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Project name for the scanned repository"),
+):
+    """
+    Ingest an existing codebase into the Defintra knowledge graph (Brownfield Ingestion §1.5, §45).
+    """
+    db = get_db()
+    scanner = BrownfieldScanner(db)
+
+    with console.status(f"[bold cyan]Scanning codebase at '{repo_path}'..."):
+        report = scanner.scan_repository(repo_path, project_name=name)
+
+    console.print(
+        Panel(
+            f"[bold green]Repository Ingested Successfully![/bold green]\n"
+            f"[bold]Project ID:[/bold] {report.project_id}\n"
+            f"[bold]Files Scanned:[/bold] {report.files_scanned}\n"
+            f"[bold]Detected Tech Stack:[/bold] {', '.join(report.detected_tech_stack) or 'Generic'}\n"
+            f"[bold]Discovered Components:[/bold] {len(report.components_found)}\n"
+            f"[bold]Discovered Contracts:[/bold] {len(report.contracts_found)}\n"
+            f"[bold]Discovered Dependencies:[/bold] {report.dependencies_found}",
+            title="Brownfield Ingestion Report",
+            border_style="green",
+        )
+    )
+
+
+@app.command()
+def conflicts(
+    detect: bool = typer.Option(True, "--detect/--no-detect", help="Run automated conflict detection"),
+    resolve_id: Optional[str] = typer.Option(None, "--resolve", "-r", help="Conflict ID to resolve"),
+    winner: Optional[str] = typer.Option(None, "--winner", "-w", help="Winning entity ID"),
+    notes: Optional[str] = typer.Option(None, "--notes", help="Resolution notes"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Detect and resolve contradictions between requirements, decisions, and constraints (§18).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    engine = ConflictEngine(db)
+
+    if resolve_id:
+        res_notes = notes or "Resolved by engineer via CLI"
+        c = engine.resolve_conflict(project.id, resolve_id, res_notes, winner)
+        console.print(f"[green][OK] Conflict '{c.id}' resolved![/green] Resolution: {res_notes}")
+        return
+
+    if detect:
+        confs = engine.detect_conflicts(project.id)
+    else:
+        confs = db.get_conflicts(project.id)
+
+    if not confs:
+        console.print("[green]No active conflicts detected in the knowledge graph![/green]")
+        return
+
+    table = Table(title=f"Conflicts in '{project.name}' (§18)")
+    table.add_column("ID", style="cyan", no_wrap=True)
+    table.add_column("Severity", style="red")
+    table.add_column("Title", style="white")
+    table.add_column("Entities", style="dim")
+    table.add_column("Status", style="yellow")
+
+    for c in confs:
+        table.add_row(c.id, c.severity, c.title, f"{c.entity_a_ref} vs {c.entity_b_ref}", c.status)
+
+    console.print(table)
+
+
+@app.command(name="test-pack")
+def generate_test_pack(
+    pack_type: str = typer.Option("human", "--type", "-t", help="Type of test pack: human, automated, security"),
+    output_file: Optional[str] = typer.Option(None, "--out", "-o", help="Optional output filepath"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Generate structured Human Testing Packs, Automated test suites, or Security regression tests (§26, §27, §28).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    gen = TestPackGenerator(db)
+    if pack_type.lower() == "automated":
+        content = gen.generate_automated_test_scaffold(project.id)
+    elif pack_type.lower() == "security":
+        content = gen.generate_security_regression_suite(project.id)
+    else:
+        content = gen.generate_human_testing_pack(project.id)
+
+    if output_file:
+        Path(output_file).write_text(content, encoding="utf-8")
+        console.print(f"[bold green]Test pack written to '{output_file}'[/bold green]")
+    else:
+        console.print(content)
+
+
+@app.command()
+def team(
+    task: str = typer.Argument(..., help="Task description to dispatch to the AI team"),
+    role: str = typer.Option("SOFTWARE_ARCHITECT", "--role", "-r", help="Assigned role (SOFTWARE_ARCHITECT, BACKEND_ENGINEER, FRONTEND_ENGINEER, SECURITY_ENGINEER, QA_ENGINEER)"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Coordinate and dispatch tasks across specialized AI team roles with model routing (§16, §17, §19).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    try:
+        agent_role = AgentRole[role.upper()]
+    except Exception:
+        agent_role = AgentRole.SOFTWARE_ARCHITECT
+
+    coordinator = TeamCoordinator(db)
+    res = coordinator.dispatch_task(project.id, task, agent_role)
+
+    routing = res["routing"]
+    console.print(
+        Panel(
+            f"[bold]Dispatch ID:[/bold] {res['dispatch_id']}\n"
+            f"[bold]Task:[/bold] {res['task']}\n"
+            f"[bold]Assigned Role:[/bold] [cyan]{res['assigned_role']}[/cyan]\n"
+            f"[bold]Recommended AI Model:[/bold] [green]{routing['recommended_model']}[/green]\n"
+            f"[bold]Routing Rationale:[/bold] {routing['reason']}\n"
+            f"[bold]Context Compiled:[/bold] {res['compiled_context_summary']['requirements_count']} requirements, {res['compiled_context_summary']['decisions_count']} decisions ({res['compiled_context_summary']['token_count']} tokens)",
+            title="AI Team Collaboration Dispatch (§16, §17)",
+            border_style="cyan",
+        )
+    )
+
+
+@app.command()
+def incident(
+    error_text: str = typer.Argument(..., help="Error message, stack trace, or incident description"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Map production incident/stack trace back to originating requirements, contracts, and assumptions (§30).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    tracer = IncidentTracer(db)
+    report = tracer.trace_incident(error_text, project.id)
+
+    console.print(
+        Panel(
+            f"[bold]Incident Summary:[/bold] {error_text[:100]}...\n"
+            f"[bold]Mapped Knowledge Graph Nodes:[/bold] {len(report.mapped_nodes)}\n"
+            f"[bold]Potentially Refuted Assumptions:[/bold] {len(report.refuted_assumptions)}\n"
+            f"[bold]Fix Blast Radius Risk:[/bold] [{'red' if report.blast_radius_risk in ['HIGH', 'CRITICAL'] else 'green'}]{report.blast_radius_risk}[/]",
+            title="Production Incident Traceback (§30)",
+            border_style="yellow",
+        )
+    )
+
+    if report.mapped_nodes:
+        table = Table(title="Originating Knowledge Graph Nodes")
+        table.add_column("ID", style="cyan")
+        table.add_column("Type", style="magenta")
+        table.add_column("Title", style="white")
+        table.add_column("Relevance", style="dim")
+        for node in report.mapped_nodes:
+            table.add_row(node["id"], node["type"], node["title"], node["relevance"])
+        console.print(table)
+
+    if report.recommended_regression_tests:
+        console.print("\n[bold yellow]Recommended Regression Tests:[/bold yellow]")
+        for test_case in report.recommended_regression_tests:
+            console.print(f"  [dim]-[/dim] {test_case}")
+
+
+@app.command()
+def runbook(
+    runbook_type: str = typer.Option("backup", "--type", "-t", help="Runbook type: backup, disaster_recovery, rollback, general"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Generate automated operations and maintenance runbooks (§31).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    gen = RunbookGenerator(db)
+    content = gen.generate_runbook(project.id, runbook_type)
+    console.print(content)
+
+
+@app.command()
+def stability(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Check Architecture Stability Budget, churn index, and modification velocity (§33).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    engine = StabilityBudgetEngine(db)
+    rep = engine.evaluate_stability(project.id)
+
+    color = "red" if rep.is_budget_exceeded else "green"
+    console.print(
+        Panel(
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]Architecture Churn Index:[/bold] [{color}]{rep.churn_index:.3f}[/] / 1.0 (Threshold: 0.50)\n"
+            f"[bold]Stability Score:[/bold] [{color}]{rep.stability_score:.1f}%[/]\n"
+            f"[bold]Budget Exceeded:[/bold] [{color}]{'YES' if rep.is_budget_exceeded else 'NO'}[/]\n\n"
+            f"- Decisions: {rep.metrics['approved_decisions']} approved, {rep.metrics['superseded_decisions']} superseded\n"
+            f"- Components: {rep.metrics['implemented_components']} implemented of {rep.metrics['total_components']} total",
+            title="Architecture Stability Budget (§33)",
+            border_style=color,
+        )
+    )
+    if rep.warnings:
+        for w in rep.warnings:
+            console.print(f"[bold red]WARNING:[/bold red] {w}")
+    for r in rep.recommendations:
+        console.print(f"[dim]-[/dim] {r}")
+
+
+@app.command()
+def diff(
+    spec_a: str = typer.Argument(..., help="Path to base DIR JSON file or snapshot"),
+    spec_b: str = typer.Argument(..., help="Path to modified DIR JSON file or snapshot"),
+):
+    """
+    Semantic diff between two DIR specifications highlighting breaking contract changes (§49).
+    """
+    try:
+        report = SpecDiffEngine.diff_from_files(spec_a, spec_b)
+        console.print(report.render_markdown())
+    except Exception as e:
+        console.print(f"[red]Error performing diff: {e}[/red]")
+
+
+@app.command()
+def sandbox(
+    action: str = typer.Argument("create", help="Sandbox action: create, validate"),
+    task_id: str = typer.Option("task_001", "--task", help="Task ID for isolation branch"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Manage isolated staging sandboxes and pre-production governance gates (§25, §29).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    mgr = SandboxManager(db)
+    if action == "create":
+        sbx = mgr.create_sandbox(project.id, task_id)
+        console.print(
+            Panel(
+                f"[bold green]Isolated Sandbox Created![/bold green]\n"
+                f"[cyan]Sandbox ID:[/cyan] {sbx.sandbox_id}\n"
+                f"[cyan]Branch:[/cyan] {sbx.branch_name}\n"
+                f"[cyan]Snapshot Hash:[/cyan] {sbx.snapshot_hash}\n"
+                f"[cyan]Status:[/cyan] {sbx.status}",
+                title="Execution Sandbox (§25)",
+                border_style="green",
+            )
+        )
+    elif action == "validate":
+        sbx = mgr.create_sandbox(project.id, task_id)
+        gate = mgr.validate_governance_gate(project.id, sbx)
+        console.print(
+            Panel(
+                f"[bold]Governance Status:[/bold] {gate['governance_status']}\n"
+                f"[bold]Ready For Merge:[/bold] {gate['ready_for_merge']}\n"
+                f"[bold]Checks:[/bold] {gate['checks']}",
+                title="Pre-Production Governance Gate (§29)",
+                border_style="green" if gate["ready_for_merge"] else "yellow",
+            )
+        )
 
 
 @app.command()
@@ -333,6 +707,37 @@ def export_spec(
     console.print(f"[bold green]Export completed to '{output_dir}':[/bold green]")
     for fname, fpath in written.items():
         console.print(f"  [cyan][OK][/cyan] {fname} -> [dim]{fpath}[/dim]")
+
+
+@app.command(name="ui")
+def launch_ui(
+    port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically"),
+):
+    """
+    Launch the interactive Defintra Control Center & Web Dashboard in your browser (§5, §7, §21).
+    """
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Defintra Control Center[/bold cyan]\n"
+            f"[green]Dashboard URL:[/green] [link=http://127.0.0.1:{port}]http://127.0.0.1:{port}[/link]\n"
+            f"[dim]Press Ctrl+C to stop the dashboard server.[/dim]",
+            title="Web Control Center",
+            border_style="cyan",
+        )
+    )
+    start_ui_server(port=port, open_browser=not no_browser)
+
+
+@app.command(name="dashboard")
+def launch_dashboard(
+    port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically"),
+):
+    """
+    Alias for `defintra ui`.
+    """
+    launch_ui(port=port, no_browser=no_browser)
 
 
 if __name__ == "__main__":
