@@ -78,3 +78,47 @@ def test_ui_post_actions(running_ui_server):
         assert res.status == 200
         data = json.loads(res.read().decode("utf-8"))
         assert "<defintra_context>" in data["rendered_text"]
+
+    # 3. Test pack endpoint
+    with urllib.request.urlopen(f"{running_ui_server}/api/test-pack?type=human") as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "Human Testing Pack" in data["content"]
+
+    # 4. Runbook endpoint
+    with urllib.request.urlopen(f"{running_ui_server}/api/runbook?type=backup") as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "Operations Runbook" in data["content"]
+
+    # 5. Stability endpoint
+    with urllib.request.urlopen(f"{running_ui_server}/api/stability") as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "stability_score" in data
+        assert "churn_index" in data
+
+    # 6. Incident endpoint
+    req_inc = urllib.request.Request(
+        f"{running_ui_server}/api/incident",
+        data=json.dumps({"error_text": "Error in auth service during login"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req_inc) as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "mapped_nodes" in data
+
+    # 7. Blast radius endpoint
+    req_blast = urllib.request.Request(
+        f"{running_ui_server}/api/blast-radius",
+        data=json.dumps({"node_id": "D-001"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req_blast) as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "total_blast_count" in data
+

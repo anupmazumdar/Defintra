@@ -42,7 +42,7 @@
       -webkit-backdrop-filter: blur(12px);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border-color);
-      padding: 1rem 2rem;
+      padding: 0.85rem 1.75rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -71,7 +71,7 @@
     }
     .brand-title {
       font-weight: 700;
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       letter-spacing: -0.5px;
       background: linear-gradient(to right, #fff, #94a3b8);
       -webkit-background-clip: text;
@@ -90,14 +90,15 @@
     /* Nav Tabs */
     .nav-tabs {
       display: flex;
-      gap: 0.5rem;
+      flex-wrap: wrap;
+      gap: 0.4rem;
     }
     .nav-tab {
       background: transparent;
       border: none;
       color: var(--text-muted);
-      padding: 0.5rem 1rem;
-      font-size: 0.9rem;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.85rem;
       font-weight: 500;
       border-radius: 6px;
       cursor: pointer;
@@ -116,8 +117,8 @@
     /* Main Container */
     main {
       flex: 1;
-      padding: 2rem;
-      max-width: 1400px;
+      padding: 1.75rem 2rem;
+      max-width: 1440px;
       width: 100%;
       margin: 0 auto;
     }
@@ -133,9 +134,9 @@
     /* Grid Layouts */
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 1.25rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1.75rem;
     }
 
     .glass-card {
@@ -144,7 +145,7 @@
       backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 1.5rem;
+      padding: 1.35rem;
       transition: all 0.2s ease;
       position: relative;
       overflow: hidden;
@@ -202,7 +203,7 @@
       color: #fff;
     }
 
-    /* Lists and Tables */
+    /* Lists and Cards */
     .item-list {
       display: flex;
       flex-direction: column;
@@ -213,6 +214,10 @@
       border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 1.2rem;
+      transition: all 0.2s ease;
+    }
+    .item-card:hover {
+      border-color: rgba(255, 255, 255, 0.16);
     }
     .item-header {
       display: flex;
@@ -233,7 +238,7 @@
     .tag-state { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid rgba(16, 185, 129, 0.3); }
 
     .code-block {
-      background: #000;
+      background: #030712;
       border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 1rem;
@@ -242,20 +247,19 @@
       color: #38bdf8;
       overflow-x: auto;
       white-space: pre-wrap;
-      max-height: 400px;
+      max-height: 480px;
     }
 
     /* Interactive Form Elements */
-    .input-field, .select-field {
+    .input-field, .select-field, textarea.input-field {
       width: 100%;
       background: rgba(0, 0, 0, 0.4);
       border: 1px solid var(--border-color);
-      color: #fff;
-      padding: 0.75rem 1rem;
       border-radius: 6px;
-      font-family: inherit;
+      padding: 0.65rem 0.9rem;
+      color: #fff;
+      font-family: var(--font-sans);
       font-size: 0.9rem;
-      margin-bottom: 1rem;
       transition: border-color 0.2s ease;
     }
     .input-field:focus, .select-field:focus {
@@ -267,11 +271,11 @@
       background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
       color: #fff;
       border: none;
-      padding: 0.7rem 1.4rem;
+      padding: 0.65rem 1.25rem;
       border-radius: 6px;
       font-weight: 600;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       transition: all 0.2s ease;
       display: inline-flex;
       align-items: center;
@@ -290,20 +294,45 @@
       background: rgba(255, 255, 255, 0.14);
       box-shadow: none;
     }
+    .btn-danger {
+      background: linear-gradient(135deg, var(--accent-red), #b91c1c);
+      color: #fff;
+    }
+    .btn-success {
+      background: linear-gradient(135deg, var(--accent-green), #059669);
+      color: #fff;
+    }
 
     /* Graph Canvas */
     #graphCanvas {
       width: 100%;
-      height: 500px;
-      background: radial-gradient(circle at center, rgba(16, 24, 39, 0.6) 0%, rgba(7, 9, 14, 0.9) 100%);
+      height: 520px;
+      background: radial-gradient(circle at center, rgba(16, 24, 39, 0.6) 0%, rgba(7, 9, 14, 0.95) 100%);
       border: 1px solid var(--border-color);
       border-radius: 12px;
       position: relative;
     }
 
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: rgba(16, 22, 36, 0.95);
+      border: 1px solid var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.3);
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      z-index: 999;
+      display: none;
+      animation: fadeIn 0.2s ease;
+    }
+
     footer {
       border-top: 1px solid var(--border-color);
-      padding: 1.5rem 2rem;
+      padding: 1.25rem 2rem;
       text-align: center;
       color: var(--text-muted);
       font-size: 0.85rem;
@@ -320,7 +349,7 @@
         <div class="brand-title">Defintra Control Center</div>
         <div style="font-size: 0.75rem; color: var(--text-muted);">Define · Validate · Compile · Build</div>
       </div>
-      <div id="projectBadge" class="project-badge">Loading project...</div>
+      <div id="projectBadge" class="project-badge">Loading...</div>
     </div>
 
     <nav class="nav-tabs">
@@ -328,9 +357,13 @@
       <button class="nav-tab" onclick="switchTab('graph')">Knowledge Graph</button>
       <button class="nav-tab" onclick="switchTab('requirements')">EARS Specs</button>
       <button class="nav-tab" onclick="switchTab('decisions')">Decision Ledger</button>
+      <button class="nav-tab" onclick="switchTab('conflicts')">Conflicts</button>
       <button class="nav-tab" onclick="switchTab('questioning')">Adaptive Questioning</button>
-      <button class="nav-tab" onclick="switchTab('compiler')">Context Compiler</button>
-      <button class="nav-tab" onclick="switchTab('operations')">Operations & Runbooks</button>
+      <button class="nav-tab" onclick="switchTab('compiler')">Context Studio</button>
+      <button class="nav-tab" onclick="switchTab('testing')">QA & Test Packs</button>
+      <button class="nav-tab" onclick="switchTab('incident')">Incident Tracer</button>
+      <button class="nav-tab" onclick="switchTab('operations')">Runbooks</button>
+      <button class="nav-tab" onclick="switchTab('stability')">Stability Budget</button>
     </nav>
   </header>
 
@@ -345,335 +378,440 @@
               <span id="healthPercent" class="gauge-value">--%</span>
             </div>
             <div>
-              <div style="font-size: 0.9rem; color: var(--text-muted);">Entropy Score: <span id="entropyScore" style="color: #fff; font-family: var(--font-mono); font-weight: 600;">--</span></div>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">Entropy: <span id="entropyScore" style="color: #fff; font-family: var(--font-mono); font-weight: 600;">--</span></div>
               <div id="healthBadge" style="margin-top: 0.4rem; font-size: 0.75rem; font-weight: 600;" class="tag tag-state">ANALYZING</div>
             </div>
           </div>
         </div>
 
         <div class="glass-card">
-          <div class="card-title">EARS Requirements</div>
-          <div id="reqCount" class="metric-number">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4rem;">Deterministic specifications parsed</div>
+          <div class="card-title">Project Requirements</div>
+          <div class="metric-number" id="countReqs">0</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Formal EARS statements</div>
         </div>
 
         <div class="glass-card">
-          <div class="card-title">Architectural Decisions</div>
-          <div id="decCount" class="metric-number">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4rem;">Locked choices with preserved trade-offs</div>
+          <div class="card-title">Approved Decisions</div>
+          <div class="metric-number" id="countDecs">0</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Preserved rationale & alternatives</div>
         </div>
 
         <div class="glass-card">
-          <div class="card-title">Open Unknowns & Gaps</div>
-          <div id="unkCount" class="metric-number" style="color: var(--accent-amber);">0</div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4rem;">Requires clarification to reduce entropy</div>
+          <div class="card-title">Open Unknowns</div>
+          <div class="metric-number" id="countUnks" style="color: var(--accent-amber);">0</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Pending question loop</div>
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-        <div class="glass-card">
-          <div class="card-title">Project Objective & Context</div>
-          <p id="projectObjective" style="line-height: 1.6; color: var(--text-main); margin-bottom: 1.5rem;"></p>
-          
-          <div class="card-title">Spec Health Recommendations</div>
-          <ul id="recommendationsList" style="list-style-position: inside; color: var(--text-muted); line-height: 1.8;"></ul>
-        </div>
+      <div class="glass-card" style="margin-bottom: 1.5rem;">
+        <div class="card-title">Project Intent & Objective</div>
+        <h2 id="projName" style="font-size: 1.35rem; margin-bottom: 0.5rem; color: #fff;">--</h2>
+        <p id="projObjective" style="color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">--</p>
+      </div>
 
-        <div class="glass-card">
-          <div class="card-title">Architecture Components</div>
-          <div id="componentsList" class="item-list" style="gap: 0.6rem;"></div>
+      <div class="glass-card">
+        <div class="card-title">Spec Health Penalties & Gaps</div>
+        <div id="penaltiesList" class="item-list" style="margin-top: 0.75rem;">
+          <div style="color: var(--text-muted); font-size: 0.9rem;">No penalties currently reported.</div>
         </div>
       </div>
     </section>
 
     <!-- 2. KNOWLEDGE GRAPH TAB -->
     <section id="tab-graph" class="tab-content">
-      <div class="glass-card" style="margin-bottom: 1.5rem;">
-        <div class="card-title">Interactive Project Knowledge & Dependency Graph (§7, §13)</div>
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-          Shows forward and reverse traceability between Requirements, Decisions, Contracts, and Architecture Components.
-        </p>
-        <canvas id="graphCanvas"></canvas>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+          <h2 style="font-size: 1.25rem;">Interactive Knowledge Graph Visualizer</h2>
+          <div style="font-size: 0.85rem; color: var(--text-muted);">Real-time topology of requirements, decisions, contracts, and dependencies</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary" onclick="renderGraph()">↻ Refresh Graph</button>
+        </div>
+      </div>
+      <canvas id="graphCanvas" width="1200" height="520"></canvas>
+      
+      <div class="glass-card" style="margin-top: 1.25rem;">
+        <div class="card-title">Blast Radius Impact Simulator</div>
+        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+          <input id="blastNodeId" class="input-field" placeholder="Enter Node ID (e.g. D-001, REQ-001)" style="flex: 1;">
+          <button class="btn" onclick="simulateBlastRadius()">Simulate Impact</button>
+        </div>
+        <div id="blastResults" style="margin-top: 1rem; display: none;">
+          <div id="blastSummary" style="font-size: 0.9rem; margin-bottom: 0.5rem; color: #fff;"></div>
+          <pre id="blastJson" class="code-block"></pre>
+        </div>
       </div>
     </section>
 
-    <!-- 3. EARS REQUIREMENTS TAB -->
+    <!-- 3. EARS SPECS TAB -->
     <section id="tab-requirements" class="tab-content">
-      <div class="glass-card">
-        <div class="card-title">Decomposed Requirements (EARS Syntax)</div>
-        <div id="earsReqList" class="item-list" style="margin-top: 1rem;"></div>
+      <div style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.25rem;">Formal EARS Requirements</h2>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Easy Approach to Requirements Syntax (Ubiquitous, Event-driven, State-driven, Optional, Unwanted)</div>
       </div>
+      <div id="reqsList" class="item-list"></div>
     </section>
 
     <!-- 4. DECISION LEDGER TAB -->
     <section id="tab-decisions" class="tab-content">
-      <div class="glass-card">
-        <div class="card-title">Decision Ledger with Preserved Disagreement (§10)</div>
-        <div id="decisionList" class="item-list" style="margin-top: 1rem;"></div>
+      <div style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.25rem;">Architectural Decision Ledger</h2>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Accepted choices with preserved disagreement and rejected alternatives</div>
       </div>
+      <div id="decsList" class="item-list"></div>
     </section>
 
-    <!-- 5. ADAPTIVE QUESTIONING TAB -->
+    <!-- 5. CONFLICTS TAB -->
+    <section id="tab-conflicts" class="tab-content">
+      <div style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.25rem;">Conflict & Contradiction Resolution Center</h2>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Detects contradictions between requirements and architecture</div>
+      </div>
+      <div id="conflictsList" class="item-list"></div>
+    </section>
+
+    <!-- 6. ADAPTIVE QUESTIONING TAB -->
     <section id="tab-questioning" class="tab-content">
-      <div class="glass-card">
-        <div class="card-title">Adaptive Questioning Loop (§5)</div>
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
-          Answering high-impact unknowns reduces project entropy and locks architecture parameters.
-        </p>
-        <div id="questioningList" class="item-list"></div>
+      <div style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.25rem;">Adaptive Questioning & Entropy Reduction Loop</h2>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Answer open unknowns to systematically reduce spec ambiguity</div>
       </div>
+      <div id="unknownsList" class="item-list"></div>
     </section>
 
-    <!-- 6. CONTEXT COMPILER STUDIO -->
+    <!-- 7. CONTEXT COMPILER STUDIO TAB -->
     <section id="tab-compiler" class="tab-content">
-      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
-        <div class="glass-card">
-          <div class="card-title">Compile Task Context (§21, §23)</div>
-          
-          <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Programming Task</label>
-          <input type="text" id="compileTaskInput" class="input-field" placeholder="e.g. Build JWT auth verification middleware" value="Build user authentication and login endpoint">
-
-          <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Agent Role</label>
-          <select id="compileRoleSelect" class="select-field">
-            <option value="BACKEND_ENGINEER">Backend Engineer</option>
-            <option value="FRONTEND_ENGINEER">Frontend Engineer</option>
-            <option value="SOFTWARE_ARCHITECT">Software Architect</option>
-            <option value="DATABASE_ENGINEER">Database Engineer</option>
-            <option value="SECURITY_ENGINEER">Security Engineer</option>
-            <option value="QA_ENGINEER">QA Engineer</option>
-            <option value="GENERAL">General Engineer</option>
-          </select>
-
-          <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Target Agent Format</label>
-          <select id="compileTargetSelect" class="select-field">
-            <option value="CLAUDE">Claude Code (XML Context)</option>
-            <option value="OPENAI">OpenAI / Markdown</option>
-            <option value="GEMINI">Gemini Prompt</option>
-            <option value="ANTIGRAVITY">Antigravity IDE</option>
-            <option value="JSON">Raw JSON</option>
-          </select>
-
-          <button class="btn" onclick="executeCompileContext()">Compile Minimum Sufficient Context</button>
-        </div>
-
-        <div class="glass-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <div class="card-title" style="margin-bottom: 0;">Compiled Output Payload</div>
-            <button class="btn btn-secondary" onclick="copyCompiledOutput()">Copy Prompt</button>
+      <div class="glass-card" style="margin-bottom: 1.5rem;">
+        <div class="card-title">Minimum Sufficient Context Studio</div>
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+          <div>
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Task Description</label>
+            <input id="compileTask" class="input-field" value="Build user authentication endpoint">
           </div>
-          <pre id="compiledOutput" class="code-block">Click "Compile Minimum Sufficient Context" to generate payload...</pre>
+          <div>
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Target AI Role</label>
+            <select id="compileRole" class="select-field">
+              <option value="BACKEND_ENGINEER">Backend Engineer</option>
+              <option value="FRONTEND_ENGINEER">Frontend Engineer</option>
+              <option value="SOFTWARE_ARCHITECT">Software Architect</option>
+              <option value="SECURITY_ENGINEER">Security Engineer</option>
+              <option value="QA_ENGINEER">QA Engineer</option>
+              <option value="PRODUCT_ANALYST">Product Analyst</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Target Model Format</label>
+            <select id="compileTarget" class="select-field">
+              <option value="CLAUDE">Claude (XML tags)</option>
+              <option value="MARKDOWN">OpenAI (Markdown)</option>
+              <option value="MARKDOWN">Gemini</option>
+              <option value="MARKDOWN">Antigravity</option>
+            </select>
+          </div>
         </div>
+        <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+          <button class="btn" onclick="compileContext()">Compile Minimal Context</button>
+          <button class="btn btn-secondary" onclick="copyCompiledText()">📋 Copy to Clipboard</button>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-title">Compiled Prompt Output</div>
+        <pre id="compiledOutput" class="code-block">Click "Compile Minimal Context" above to generate role-optimized context payload.</pre>
       </div>
     </section>
 
-    <!-- 7. OPERATIONS & RUNBOOKS TAB -->
-    <section id="tab-operations" class="tab-content">
-      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
-        <div class="glass-card">
-          <div class="card-title">Operational Runbook Hub (§31)</div>
-          <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
-            <button class="btn btn-secondary" onclick="fetchRunbook('backup')">Database Backup & Restore</button>
-            <button class="btn btn-secondary" onclick="fetchRunbook('disaster_recovery')">Failover & Disaster Recovery</button>
-            <button class="btn btn-secondary" onclick="fetchRunbook('rollback')">Zero-Downtime Rollback</button>
-          </div>
-          
-          <div class="card-title" style="margin-top: 2rem;">Incident Traceback Tester (§30)</div>
-          <textarea id="incidentInput" class="input-field" style="height: 100px; resize: vertical;" placeholder="Paste error log or stack trace..."></textarea>
-          <button class="btn" onclick="traceIncident()">Trace Root Cause in Graph</button>
+    <!-- 8. QA & TEST PACKS TAB -->
+    <section id="tab-testing" class="tab-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+          <h2 style="font-size: 1.25rem;">QA & Test Packs Generator</h2>
+          <div style="font-size: 0.85rem; color: var(--text-muted);">Human QA walkthroughs and executable Pytest suites mapped 1:1 to EARS requirements</div>
         </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary" onclick="loadTestPack('human')">Human QA Checklist</button>
+          <button class="btn btn-secondary" onclick="loadTestPack('automated')">Pytest Test Suite</button>
+          <button class="btn btn-secondary" onclick="loadTestPack('security')">Security Regression</button>
+          <button class="btn" onclick="copyTestPack()">📋 Copy Content</button>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div id="testPackTitle" class="card-title">Human Verification Checklist</div>
+        <pre id="testPackOutput" class="code-block">Loading test pack...</pre>
+      </div>
+    </section>
 
+    <!-- 9. INCIDENT TRACER TAB -->
+    <section id="tab-incident" class="tab-content">
+      <div class="glass-card" style="margin-bottom: 1.5rem;">
+        <div class="card-title">Production Incident-to-Requirement Feedback Loop</div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Paste a production error message, stack trace, or incident summary to map it back to the originating requirements, assumptions, and contracts.
+        </p>
+        <textarea id="incidentInput" class="input-field" rows="4" placeholder="e.g. NullPointerException in auth_service.py:142 during token validation"></textarea>
+        <div style="margin-top: 0.75rem;">
+          <button class="btn" onclick="traceIncident()">Trace Incident Root Cause</button>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-title">Incident Analysis & Remediation Report</div>
+        <pre id="incidentOutput" class="code-block">Enter an incident or stack trace above and click "Trace Incident Root Cause".</pre>
+      </div>
+    </section>
+
+    <!-- 10. OPERATIONS & RUNBOOKS TAB -->
+    <section id="tab-operations" class="tab-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+          <h2 style="font-size: 1.25rem;">Operations & Maintenance Runbooks</h2>
+          <div style="font-size: 0.85rem; color: var(--text-muted);">Automated procedures for database backup, failover, disaster recovery, and rollback</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary" onclick="loadRunbook('backup')">Backup</button>
+          <button class="btn btn-secondary" onclick="loadRunbook('failover')">Failover</button>
+          <button class="btn btn-secondary" onclick="loadRunbook('disaster_recovery')">Disaster Recovery</button>
+          <button class="btn btn-secondary" onclick="loadRunbook('rollback')">Rollback</button>
+          <button class="btn" onclick="copyRunbook()">📋 Copy Runbook</button>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div id="runbookTitle" class="card-title">Database Backup Runbook</div>
+        <pre id="runbookOutput" class="code-block">Loading runbook...</pre>
+      </div>
+    </section>
+
+    <!-- 11. STABILITY BUDGET TAB -->
+    <section id="tab-stability" class="tab-content">
+      <div style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.25rem;">Architecture Stability & Churn Budget</h2>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Tracks mutation velocity and warns of specification churn before deployment</div>
+      </div>
+      <div class="metrics-grid">
         <div class="glass-card">
-          <div class="card-title">Runbook / Incident Results</div>
-          <pre id="operationsOutput" class="code-block">Select a runbook or submit an incident to view operational details...</pre>
+          <div class="card-title">Churn Index</div>
+          <div class="metric-number" id="churnIndex">0.00</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Modifications / component count</div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">High Churn Nodes</div>
+          <div class="metric-number" id="highChurnCount" style="color: var(--accent-amber);">0</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Frequently mutated entities</div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">Stability Status</div>
+          <div class="metric-number" id="stabilityStatus" style="font-size: 1.35rem; color: var(--accent-green);">HEALTHY</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Architectural drift rating</div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-title">Node Mutation Velocity History</div>
+        <div id="stabilityList" class="item-list" style="margin-top: 0.75rem;">
+          <div style="color: var(--text-muted); font-size: 0.9rem;">No recent mutations recorded.</div>
         </div>
       </div>
     </section>
   </main>
 
+  <div id="toast">Copied to clipboard!</div>
+
   <footer>
-    Defintra — Project Intelligence and Control Layer for AI Software Engineering · Local-First Persistent Knowledge Graph
+    Defintra Control Center · Project Intelligence & Control Layer for AI Software Engineering · Local-First Architecture
   </footer>
 
   <script>
-    let appState = null;
+    let globalState = null;
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2200);
+    }
 
     function switchTab(tabId) {
-      document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
       
-      const tabBtn = Array.from(document.querySelectorAll('.nav-tab')).find(b => b.getAttribute('onclick').includes(tabId));
-      if (tabBtn) tabBtn.classList.add('active');
+      const tabEl = document.getElementById(`tab-${tabId}`);
+      if (tabEl) tabEl.classList.add('active');
+      
+      const btn = Array.from(document.querySelectorAll('.nav-tab')).find(b => 
+        b.getAttribute('onclick')?.includes(tabId)
+      );
+      if (btn) btn.classList.add('active');
 
-      const content = document.getElementById('tab-' + tabId);
-      if (content) content.classList.add('active');
-
-      if (tabId === 'graph') {
-        drawGraph();
-      }
+      if (tabId === 'graph') renderGraph();
+      if (tabId === 'operations') loadRunbook('backup');
+      if (tabId === 'testing') loadTestPack('human');
+      if (tabId === 'stability') loadStability();
     }
 
     async function loadState() {
       try {
         const res = await fetch('/api/state');
-        if (!res.ok) throw new Error('Failed to load project state');
-        appState = await res.json();
-        renderOverview();
-        renderRequirements();
-        renderDecisions();
-        renderQuestioning();
+        if (!res.ok) throw new Error('Failed to fetch state');
+        globalState = await res.json();
+
+        // Populate badges and basic stats
+        document.getElementById('projectBadge').innerText = globalState.project?.name || 'Project';
+        document.getElementById('projName').innerText = globalState.project?.name || 'Defintra Project';
+        document.getElementById('projObjective').innerText = globalState.project?.objective || 'No objective specified.';
+        
+        const health = globalState.health || { health_score: 100, entropy_score: 0, penalties: [] };
+        const hVal = Math.round(health.health_score);
+        document.getElementById('healthPercent').innerText = `${hVal}%`;
+        document.getElementById('gaugeCircle').style.setProperty('--health', hVal);
+        document.getElementById('entropyScore').innerText = health.entropy_score.toFixed(2);
+        
+        const badge = document.getElementById('healthBadge');
+        if (hVal >= 80) {
+          badge.innerText = 'STABLE';
+          badge.className = 'tag tag-state';
+        } else if (hVal >= 50) {
+          badge.innerText = 'AMBIGUOUS';
+          badge.className = 'tag tag-high';
+        } else {
+          badge.innerText = 'HIGH ENTROPY';
+          badge.className = 'tag tag-critical';
+        }
+
+        document.getElementById('countReqs').innerText = globalState.requirements?.length || 0;
+        document.getElementById('countDecs').innerText = globalState.decisions?.length || 0;
+        document.getElementById('countUnks').innerText = globalState.unknowns?.length || 0;
+
+        // Penalties list
+        const penList = document.getElementById('penaltiesList');
+        if (health.penalties && health.penalties.length > 0) {
+          penList.innerHTML = health.penalties.map(p => `
+            <div class="item-card" style="border-left: 3px solid var(--accent-amber);">
+              <div style="font-weight: 600; color: #fff;">${p.reason}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Penalty Weight: -${p.penalty_weight} pts (${p.category})</div>
+            </div>
+          `).join('');
+        } else {
+          penList.innerHTML = '<div style="color: var(--accent-green); font-size: 0.9rem;">✓ No active penalties. Specification health is optimal.</div>';
+        }
+
+        // Requirements tab
+        const reqsList = document.getElementById('reqsList');
+        reqsList.innerHTML = (globalState.requirements || []).map(r => `
+          <div class="item-card">
+            <div class="item-header">
+              <span style="font-weight: 700; color: #fff;">${r.id} — ${r.title}</span>
+              <div>
+                <span class="tag tag-pattern">${r.ears_pattern || 'UBIQUITOUS'}</span>
+                <span class="tag tag-state" style="margin-left: 0.3rem;">${r.priority || 'P1'}</span>
+              </div>
+            </div>
+            <div style="font-family: var(--font-mono); color: #38bdf8; font-size: 0.85rem; margin: 0.4rem 0;">${r.description}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+              <strong>Acceptance Criteria:</strong> ${(r.acceptance_criteria || []).join('; ') || 'Standard verification'}
+            </div>
+          </div>
+        `).join('') || '<div style="color: var(--text-muted);">No requirements found.</div>';
+
+        // Decisions tab
+        const decsList = document.getElementById('decsList');
+        decsList.innerHTML = (globalState.decisions || []).map(d => `
+          <div class="item-card">
+            <div class="item-header">
+              <span style="font-weight: 700; color: #fff;">${d.id} — ${d.title}</span>
+              <span class="tag tag-state">${d.status || 'APPROVED'}</span>
+            </div>
+            <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;"><strong>Decision:</strong> ${d.decision}</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);"><strong>Rationale:</strong> ${d.rationale}</div>
+            ${d.preserved_disagreements?.length ? `
+              <div style="margin-top: 0.5rem; font-size: 0.8rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px;">
+                <strong style="color: var(--accent-amber);">Preserved Disagreement / Rejected Alternatives:</strong>
+                ${d.preserved_disagreements.map(pd => `<div style="color: var(--text-muted); margin-top: 0.2rem;">• <em>${pd.alternative}:</em> ${pd.rejection_rationale}</div>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `).join('') || '<div style="color: var(--text-muted);">No decisions recorded.</div>';
+
+        // Conflicts tab
+        const confList = document.getElementById('conflictsList');
+        confList.innerHTML = (globalState.conflicts || []).map(cf => `
+          <div class="item-card" style="border-left: 3px solid ${cf.resolved ? 'var(--accent-green)' : 'var(--accent-red)'};">
+            <div class="item-header">
+              <span style="font-weight: 700; color: #fff;">${cf.id} — ${cf.title}</span>
+              <span class="tag ${cf.resolved ? 'tag-state' : 'tag-critical'}">${cf.resolved ? 'RESOLVED' : 'UNRESOLVED'}</span>
+            </div>
+            <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${cf.description}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Conflicting entities: <code>${cf.node_a_id}</code> vs <code>${cf.node_b_id}</code></div>
+            ${!cf.resolved ? `
+              <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary" onclick="resolveConflict('${cf.id}', '${cf.node_a_id}')">Favor ${cf.node_a_id}</button>
+                <button class="btn btn-secondary" onclick="resolveConflict('${cf.id}', '${cf.node_b_id}')">Favor ${cf.node_b_id}</button>
+              </div>
+            ` : `<div style="font-size: 0.8rem; color: var(--accent-green); margin-top: 0.3rem;">Resolution notes: ${cf.resolution_notes || 'Resolved'}</div>`}
+          </div>
+        `).join('') || '<div style="color: var(--accent-green);">✓ No architectural or requirement conflicts detected.</div>';
+
+        // Unknowns tab
+        const unkList = document.getElementById('unknownsList');
+        unkList.innerHTML = (globalState.unknowns || []).map(u => `
+          <div class="item-card" style="border-left: 3px solid var(--accent-amber);">
+            <div class="item-header">
+              <span style="font-weight: 700; color: #fff;">${u.id} — ${u.question}</span>
+              <span class="tag tag-high">Entropy Cost: ${u.entropy_cost}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">Category: ${u.category}</div>
+            <div style="display: flex; gap: 0.5rem;">
+              <input id="ans_${u.id}" class="input-field" placeholder="Type your answer to resolve this unknown...">
+              <button class="btn" onclick="submitAnswer('${u.id}')">Submit Answer</button>
+            </div>
+          </div>
+        `).join('') || '<div style="color: var(--accent-green);">✓ All unknowns resolved. Graph ambiguity is zero.</div>';
+
       } catch (err) {
         console.error(err);
       }
     }
 
-    function renderOverview() {
-      if (!appState) return;
-      const { project, health, requirements, decisions, unknowns, components } = appState;
-      
-      document.getElementById('projectBadge').textContent = `${project.name} (${project.domain})`;
-      document.getElementById('projectObjective').textContent = project.objective;
-
-      // Health Gauge
-      const score = health.health_score || 0;
-      document.getElementById('gaugeCircle').style.setProperty('--health', score);
-      document.getElementById('healthPercent').textContent = `${Math.round(score)}%`;
-      document.getElementById('entropyScore').textContent = `${health.entropy} / 1.0`;
-
-      // Counters
-      document.getElementById('reqCount').textContent = requirements.length;
-      document.getElementById('decCount').textContent = decisions.length;
-      document.getElementById('unkCount').textContent = unknowns.filter(u => u.status === 'OPEN').length;
-
-      // Recommendations
-      const recList = document.getElementById('recommendationsList');
-      recList.innerHTML = health.recommendations.map(r => `<li>${r}</li>`).join('');
-
-      // Components
-      const compList = document.getElementById('componentsList');
-      compList.innerHTML = components.map(c => `
-        <div style="background: rgba(0,0,0,0.3); padding: 0.6rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-          <div style="font-weight: 600; font-size: 0.85rem;">${c.name}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">${c.component_type} · ${c.stability_state}</div>
-        </div>
-      `).join('');
-    }
-
-    function renderRequirements() {
-      const container = document.getElementById('earsReqList');
-      if (!appState || !appState.requirements.length) {
-        container.innerHTML = '<p style="color: var(--text-muted);">No requirements defined.</p>';
-        return;
-      }
-      container.innerHTML = appState.requirements.map(r => `
-        <div class="item-card">
-          <div class="item-header">
-            <div>
-              <span style="font-weight: 700; font-family: var(--font-mono); color: var(--accent-cyan);">${r.id}</span>
-              <span style="font-weight: 600; margin-left: 0.5rem;">${r.title}</span>
-            </div>
-            <div style="display: flex; gap: 0.4rem;">
-              <span class="tag tag-pattern">${r.ears_pattern}</span>
-              <span class="tag tag-${r.priority.toLowerCase()}">${r.priority}</span>
-            </div>
-          </div>
-          <div style="font-family: var(--font-mono); font-size: 0.9rem; color: #e2e8f0; background: rgba(0,0,0,0.3); padding: 0.6rem; border-radius: 6px;">
-            ${r.description}
-          </div>
-          ${r.acceptance_criteria && r.acceptance_criteria.length ? `
-            <div style="margin-top: 0.6rem; font-size: 0.8rem; color: var(--text-muted);">
-              <strong>Acceptance Criteria:</strong>
-              <ul style="list-style-position: inside; margin-top: 0.2rem;">
-                ${r.acceptance_criteria.map(ac => `<li>${ac}</li>`).join('')}
-              </ul>
-            </div>
-          ` : ''}
-        </div>
-      `).join('');
-    }
-
-    function renderDecisions() {
-      const container = document.getElementById('decisionList');
-      if (!appState || !appState.decisions.length) {
-        container.innerHTML = '<p style="color: var(--text-muted);">No decisions recorded.</p>';
-        return;
-      }
-      container.innerHTML = appState.decisions.map(d => `
-        <div class="item-card">
-          <div class="item-header">
-            <div>
-              <span style="font-weight: 700; font-family: var(--font-mono); color: var(--accent-purple);">${d.id}</span>
-              <span style="font-weight: 600; margin-left: 0.5rem;">${d.title}</span>
-            </div>
-            <span class="tag tag-state">${d.status}</span>
-          </div>
-          <div style="font-size: 0.95rem; font-weight: 500; color: #fff; margin-bottom: 0.4rem;">
-            <strong>Decision:</strong> ${d.decision}
-          </div>
-          <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
-            <strong>Rationale:</strong> ${d.reason}
-          </div>
-          ${d.rejected_alternatives && d.rejected_alternatives.length ? `
-            <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); padding: 0.6rem; border-radius: 6px; font-size: 0.8rem;">
-              <strong style="color: #f87171;">Preserved Disagreement (Rejected Alternatives):</strong>
-              ${d.rejected_alternatives.map(a => `<div>• <strong>${a.alternative}:</strong> <em>${a.reason_rejected}</em></div>`).join('')}
-            </div>
-          ` : ''}
-        </div>
-      `).join('');
-    }
-
-    function renderQuestioning() {
-      const container = document.getElementById('questioningList');
-      const unknowns = (appState && appState.unknowns) ? appState.unknowns : [];
-      if (!unknowns.length) {
-        container.innerHTML = '<p style="color: var(--accent-green); font-weight: 600;">All unknowns resolved! Project clarity is maximized.</p>';
-        return;
-      }
-
-      container.innerHTML = unknowns.map(u => `
-        <div class="item-card" style="border-left: 4px solid ${u.status === 'OPEN' ? 'var(--accent-amber)' : 'var(--accent-green)'};">
-          <div class="item-header">
-            <span style="font-weight: 600; font-size: 1rem;">${u.question}</span>
-            <span class="tag tag-${u.impact === 'HIGH' ? 'critical' : 'high'}">${u.impact} IMPACT · ${u.status}</span>
-          </div>
-          ${u.status === 'OPEN' ? `
-            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-              <input type="text" id="ans-${u.id}" class="input-field" style="margin-bottom: 0;" placeholder="Provide clarification or answer...">
-              <button class="btn" onclick="submitAnswer('${u.id}')">Submit Answer</button>
-            </div>
-          ` : `
-            <div style="font-size: 0.85rem; color: var(--accent-green); margin-top: 0.4rem;">
-              <strong>Resolved:</strong> ${u.resolution || 'Clarified by engineer'}
-            </div>
-          `}
-        </div>
-      `).join('');
-    }
-
     async function submitAnswer(unkId) {
-      const input = document.getElementById('ans-' + unkId);
-      const answer = input ? input.value.trim() : '';
-      if (!answer) return;
-
+      const inp = document.getElementById(`ans_${unkId}`);
+      if (!inp || !inp.value.trim()) {
+        alert('Please enter an answer.');
+        return;
+      }
       try {
         const res = await fetch('/api/answer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ unknown_id: unkId, answer })
+          body: JSON.stringify({ unknown_id: unkId, answer: inp.value.trim() })
         });
         if (res.ok) {
-          await loadState();
+          showToast('Answer recorded! Spec health updated.');
+          loadState();
         }
       } catch (err) {
         console.error(err);
       }
     }
 
-    async function executeCompileContext() {
-      const task = document.getElementById('compileTaskInput').value;
-      const role = document.getElementById('compileRoleSelect').value;
-      const target = document.getElementById('compileTargetSelect').value;
+    async function resolveConflict(cid, winnerId) {
+      try {
+        const res = await fetch('/api/conflicts/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conflict_id: cid, winner_id: winnerId, notes: `Resolved in UI favoring ${winnerId}` })
+        });
+        if (res.ok) {
+          showToast(`Conflict ${cid} resolved!`);
+          loadState();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
 
+    async function compileContext() {
+      const task = document.getElementById('compileTask').value;
+      const role = document.getElementById('compileRole').value;
+      const target = document.getElementById('compileTarget').value;
+      
       try {
         const res = await fetch('/api/compile', {
           method: 'POST',
@@ -681,72 +819,146 @@
           body: JSON.stringify({ task, role, target })
         });
         const data = await res.json();
-        document.getElementById('compiledOutput').textContent = data.rendered_text;
+        document.getElementById('compiledOutput').innerText = data.rendered_text;
+        showToast('Context compiled successfully!');
       } catch (err) {
         console.error(err);
       }
     }
 
-    function copyCompiledOutput() {
-      const text = document.getElementById('compiledOutput').textContent;
+    function copyCompiledText() {
+      const text = document.getElementById('compiledOutput').innerText;
       navigator.clipboard.writeText(text);
-      alert('Compiled context copied to clipboard!');
+      showToast('Compiled context copied to clipboard!');
     }
 
-    async function fetchRunbook(type) {
+    async function loadTestPack(type) {
+      document.getElementById('testPackTitle').innerText = `${type.toUpperCase()} Test Pack`;
       try {
-        const res = await fetch(`/api/runbook?type=${type}`);
+        const res = await fetch(`/api/test-pack?type=${type}`);
         const data = await res.json();
-        document.getElementById('operationsOutput').textContent = data.content;
+        document.getElementById('testPackOutput').innerText = data.content;
       } catch (err) {
         console.error(err);
       }
+    }
+
+    function copyTestPack() {
+      const text = document.getElementById('testPackOutput').innerText;
+      navigator.clipboard.writeText(text);
+      showToast('Test pack copied to clipboard!');
     }
 
     async function traceIncident() {
-      const error_text = document.getElementById('incidentInput').value;
-      if (!error_text) return;
+      const errorText = document.getElementById('incidentInput').value;
+      if (!errorText.trim()) return;
       try {
         const res = await fetch('/api/incident', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error_text })
+          body: JSON.stringify({ error_text: errorText })
         });
         const data = await res.json();
-        document.getElementById('operationsOutput').textContent = JSON.stringify(data, null, 2);
+        document.getElementById('incidentOutput').innerText = JSON.stringify(data, null, 2);
+        showToast('Incident traced successfully!');
       } catch (err) {
         console.error(err);
       }
     }
 
-    async function drawGraph() {
+    async function loadRunbook(type) {
+      document.getElementById('runbookTitle').innerText = `${type.replace('_', ' ').toUpperCase()} Runbook`;
+      try {
+        const res = await fetch(`/api/runbook?type=${type}`);
+        const data = await res.json();
+        document.getElementById('runbookOutput').innerText = data.content;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function copyRunbook() {
+      const text = document.getElementById('runbookOutput').innerText;
+      navigator.clipboard.writeText(text);
+      showToast('Runbook copied to clipboard!');
+    }
+
+    async function loadStability() {
+      try {
+        const res = await fetch('/api/stability');
+        const data = await res.json();
+        document.getElementById('churnIndex').innerText = data.churn_index?.toFixed(2) || '0.00';
+        document.getElementById('highChurnCount').innerText = data.high_churn_nodes?.length || 0;
+        
+        const statEl = document.getElementById('stabilityStatus');
+        if (data.stability_health === 'HEALTHY') {
+          statEl.innerText = 'HEALTHY';
+          statEl.style.color = 'var(--accent-green)';
+        } else {
+          statEl.innerText = 'HIGH CHURN';
+          statEl.style.color = 'var(--accent-amber)';
+        }
+
+        const list = document.getElementById('stabilityList');
+        if (data.mutation_counts && Object.keys(data.mutation_counts).length > 0) {
+          list.innerHTML = Object.entries(data.mutation_counts).map(([k, v]) => `
+            <div class="item-card" style="display: flex; justify-content: space-between;">
+              <span style="font-family: var(--font-mono); color: #fff;">${k}</span>
+              <span class="tag tag-state">${v} mutations</span>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">No node mutations detected yet.</div>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function simulateBlastRadius() {
+      const nodeId = document.getElementById('blastNodeId').value.trim();
+      if (!nodeId) return;
+      try {
+        const res = await fetch('/api/blast-radius', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_id: nodeId })
+        });
+        const data = await res.json();
+        document.getElementById('blastResults').style.display = 'block';
+        document.getElementById('blastSummary').innerText = `Total downstream blast count: ${data.total_blast_count} | Risk Level: ${data.risk_level} | Approval: ${data.approval_required}`;
+        document.getElementById('blastJson').innerText = JSON.stringify(data, null, 2);
+        showToast('Blast radius evaluated!');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function renderGraph() {
       const canvas = document.getElementById('graphCanvas');
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = 480;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       try {
         const res = await fetch('/api/graph');
-        const graphData = await res.json();
-        const nodes = graphData.nodes || [];
-        const edges = graphData.edges || [];
+        const data = await res.json();
+        const nodes = data.nodes || [];
+        const edges = data.edges || [];
 
-        if (!nodes.length) {
+        if (nodes.length === 0) {
           ctx.fillStyle = '#9ca3af';
           ctx.font = '14px Inter';
-          ctx.fillText('No graph nodes present.', 20, 30);
+          ctx.textAlign = 'center';
+          ctx.fillText('No graph nodes available. Run `defintra init` or `defintra analyze`.', canvas.width / 2, canvas.height / 2);
           return;
         }
 
-        // Circular Layout
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
         const radius = Math.min(centerX, centerY) - 80;
-
         const nodePos = {};
+
         nodes.forEach((n, i) => {
           const angle = (i / nodes.length) * 2 * Math.PI;
           nodePos[n.id] = {
@@ -757,7 +969,7 @@
         });
 
         // Draw Edges
-        ctx.strokeStyle = 'rgba(6, 182, 212, 0.25)';
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.3)';
         ctx.lineWidth = 1.5;
         edges.forEach(e => {
           const from = nodePos[e.source];
@@ -781,6 +993,7 @@
           if (n.type.includes('REQUIREMENT')) ctx.fillStyle = '#06b6d4';
           else if (n.type.includes('DECISION')) ctx.fillStyle = '#8b5cf6';
           else if (n.type.includes('COMPONENT')) ctx.fillStyle = '#10b981';
+          else if (n.type.includes('CONFLICT')) ctx.fillStyle = '#ef4444';
           else ctx.fillStyle = '#f59e0b';
           
           ctx.fill();
@@ -788,7 +1001,6 @@
           ctx.lineWidth = 1.5;
           ctx.stroke();
 
-          // Text label
           ctx.fillStyle = '#f3f4f6';
           ctx.font = '11px JetBrains Mono';
           ctx.textAlign = 'center';

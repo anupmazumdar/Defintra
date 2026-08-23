@@ -146,6 +146,22 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             content = gen.generate_runbook(project.id, rb_type)
             self._send_json({"type": rb_type, "content": content})
 
+        elif path.startswith("/api/test-pack"):
+            if not project:
+                self._send_json({"error": "No project"}, 404)
+                return
+            query = urllib.parse.parse_qs(parsed.query)
+            tp_type = query.get("type", ["human"])[0]
+            from defintra.core.testing.test_packs import TestPackGenerator
+            tp_gen = TestPackGenerator(db)
+            if tp_type == "automated":
+                content = tp_gen.generate_automated_test_scaffold(project.id)
+            elif tp_type == "security":
+                content = tp_gen.generate_security_regression_suite(project.id)
+            else:
+                content = tp_gen.generate_human_testing_pack(project.id)
+            self._send_json({"type": tp_type, "content": content})
+
         else:
             self.send_error(404, "Not Found")
 
@@ -213,6 +229,27 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             coordinator = TeamCoordinator(db)
             res = coordinator.dispatch_task(project.id, task, role)
             self._send_json(res)
+
+        elif path == "/api/blast-radius":
+            node_id = payload.get("node_id", "")
+            p_graph = ProjectGraph(db, project.id)
+            report = p_graph.calculate_blast_radius(node_id)
+            self._send_json(report.to_dict())
+
+        elif path == "/api/scan":
+            scan_path = payload.get("path", ".")
+            proj_name = payload.get("name", "Scanned Project")
+            from defintra.core.brownfield.scanner import BrownfieldScanner
+            scanner = BrownfieldScanner(db)
+            report = scanner.scan_repository(scan_path, project_name=proj_name)
+            self._send_json(report.to_dict())
+
+        elif path == "/api/sandbox/create":
+            task_id = payload.get("task", "task_execution")
+            from defintra.core.sandbox.manager import SandboxManager
+            sbx_mgr = SandboxManager(db)
+            sandbox = sbx_mgr.create_sandbox(project.id, task_id=task_id)
+            self._send_json(sandbox.to_dict())
 
         else:
             self.send_error(404, "Not Found")
