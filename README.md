@@ -1,17 +1,13 @@
 # Defintra — Project Intelligence & Control Layer
 
-<p align="center">
-  <strong>Define. Validate. Compile. Build.</strong><br>
-  <em>The definitive project intelligence and governance layer for AI-native software engineering.</em>
-</p>
+**Define. Validate. Compile. Build.**
+*The definitive project intelligence and governance layer for AI-native software engineering.*
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/status-active-emerald.svg" alt="Status">
-  <img src="https://img.shields.io/badge/MCP-compatible-purple.svg" alt="MCP Compatible">
-  <img src="https://img.shields.io/badge/tests-58%20passing-brightgreen.svg" alt="Tests Passing">
-</p>
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Status](https://img.shields.io/badge/status-active-emerald.svg)
+![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)
+![Tests Passing](https://img.shields.io/badge/tests-58%20passing-brightgreen.svg)
 
 ---
 
