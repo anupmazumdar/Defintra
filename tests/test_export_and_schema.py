@@ -60,5 +60,28 @@ def test_export_all_files(populated_project):
         assert "spec.md" in files
         assert "requirements.json" in files
         assert "decisions.json" in files
+        assert ".cursorrules" in files
+        assert "CLAUDE.md" in files
+        assert "AGENTS.md" in files
         assert os.path.exists(files["dir.json"])
         assert os.path.exists(files["spec.md"])
+        assert os.path.exists(files[".cursorrules"])
+
+
+def test_export_individual_agent_rules(populated_project):
+    db, project_id = populated_project
+    exporter = Exporter(db, project_id)
+
+    with tempfile.TemporaryDirectory() as out_dir:
+        cr_path = os.path.join(out_dir, ".cursorrules")
+        exporter.export_agent_rules("cursor", cr_path)
+        assert os.path.exists(cr_path)
+        content = open(cr_path, "r", encoding="utf-8").read()
+        assert "# Defintra Context & Project Rules (.cursorrules)" in content
+
+        claude_path = os.path.join(out_dir, "CLAUDE.md")
+        exporter.export_agent_rules("claude", claude_path)
+        assert os.path.exists(claude_path)
+        c_content = open(claude_path, "r", encoding="utf-8").read()
+        assert "# CLAUDE.md" in c_content
+

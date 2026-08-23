@@ -692,9 +692,10 @@ def audit(
 def export_spec(
     project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
     output_dir: str = typer.Option(".defintra/export", "--out", "-o", help="Output directory"),
+    rules: Optional[str] = typer.Option(None, "--rules", "-r", help="Directly export agent rule file: cursor (.cursorrules), claude (CLAUDE.md), or agents (AGENTS.md)"),
 ):
     """
-    Export dual-track outputs: DIR JSON Schema v1 payload + Human-readable Markdown spec.
+    Export dual-track outputs: DIR JSON Schema v1 payload + Human-readable Markdown spec + Agent rules (§22).
     """
     db = get_db()
     project = db.get_project(project_id) if project_id else db.get_first_project()
@@ -703,7 +704,12 @@ def export_spec(
         raise typer.Exit(1)
 
     exporter = Exporter(db, project.id)
-    with console.status("[bold cyan]Exporting DIR JSON and Markdown specifications..."):
+    if rules:
+        target_path = exporter.export_agent_rules(rules)
+        console.print(f"[bold green]Agent rule file written to '{target_path}'[/bold green]")
+        return
+
+    with console.status("[bold cyan]Exporting DIR JSON, Markdown, and Agent rule specifications..."):
         written = exporter.export_all(output_dir)
 
     console.print(f"[bold green]Export completed to '{output_dir}':[/bold green]")

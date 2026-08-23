@@ -152,8 +152,52 @@ class GeminiLLMProvider(BaseLLMProvider):
         return MockHeuristicLLMProvider().generate(prompt, system_prompt)
 
 
+class AnthropicLLMProvider(BaseLLMProvider):
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-5-sonnet-20241022"):
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.model = model
+
+    def generate(self, prompt: str, system_prompt: Optional[str] = None) -> LLMResponse:
+        if not self.api_key:
+            return MockHeuristicLLMProvider().generate(prompt, system_prompt)
+
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        body = {
+            "model": self.model,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system_prompt:
+            body["system"] = system_prompt
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                res = client.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
+                if res.status_code == 200:
+                    data = res.json()
+                    text = data["content"][0]["text"]
+                    # Extract JSON if enclosed in markdown code blocks
+                    json_str = text
+                    if "```json" in text:
+                        json_str = text.split("```json")[1].split("```")[0].strip()
+                    elif "```" in text:
+                        json_str = text.split("```")[1].split("```")[0].strip()
+                    parsed = json.loads(json_str)
+                    return LLMResponse(content=text, raw_json=parsed)
+        except Exception:
+            pass
+
+        return MockHeuristicLLMProvider().generate(prompt, system_prompt)
+
+
 def get_default_llm_provider() -> BaseLLMProvider:
-    if os.environ.get("GEMINI_API_KEY"):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicLLMProvider()
+    elif os.environ.get("GEMINI_API_KEY"):
         return GeminiLLMProvider()
     elif os.environ.get("OPENAI_API_KEY"):
         return OpenAILLMProvider()
