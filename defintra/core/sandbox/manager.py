@@ -4,14 +4,13 @@ Manages isolated Git branches/worktrees, execution environments,
 snapshot hashes, and pre-production governance gates.
 """
 
-from datetime import datetime, timezone
 import hashlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 import uuid
 
 from defintra.core.db.database import Database
-from defintra.core.models.entities import ChangeRisk, current_utc_time
+from defintra.core.models.entities import current_utc_time
 
 
 class SandboxState:

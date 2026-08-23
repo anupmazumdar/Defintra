@@ -1,8 +1,6 @@
-import pytest
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.models.entities import (
     ArtifactState,
-    Assumption,
     Conflict,
     Decision,
     EARSPattern,

@@ -1,5 +1,4 @@
-import pytest
-from defintra.core.models.entities import EARSPattern, RequirementPriority
+from defintra.core.models.entities import EARSPattern
 from defintra.core.requirements.ears import EARSEngine, EARSRequirement
 
 

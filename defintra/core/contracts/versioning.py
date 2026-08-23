@@ -4,9 +4,8 @@ Enforces semantic versioning rules (MAJOR.MINOR.PATCH) on shared API, Database,
 and UI contracts, detecting breaking schema drift across AI agent iterations.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from defintra.core.db.database import Database
-from defintra.core.models.entities import ArtifactState, Contract
 
 
 class ContractDiffResult:
@@ -75,7 +74,7 @@ class ContractVersioningEngine:
         for k in common:
             old_val = old_spec[k]
             new_val = new_spec[k]
-            if type(old_val) != type(new_val):
+            if type(old_val) is not type(new_val):
                 breaking_changes.append(f"Type mutation for '{k}': changed from {type(old_val).__name__} to {type(new_val).__name__}")
             elif isinstance(old_val, dict) and isinstance(new_val, dict):
                 # Nested check

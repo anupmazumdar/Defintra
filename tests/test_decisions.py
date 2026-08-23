@@ -4,9 +4,7 @@ import pytest
 from defintra.core.db.database import Database
 from defintra.core.decisions.ledger import DecisionLedger
 from defintra.core.models.entities import (
-    ApprovalLevel,
     ArtifactState,
-    ChangeRisk,
     Project,
     RejectedAlternative,
 )
@@ -34,7 +32,7 @@ def test_decision_ledger_record_and_preserve_disagreement(temp_db):
     temp_db.save_project(project)
 
     ledger = DecisionLedger(temp_db)
-    dec = ledger.record_decision(
+    ledger.record_decision(
         project_id="p1",
         decision_id="D-101",
         title="Primary Database",
@@ -66,7 +64,7 @@ def test_decision_supersede_preserves_history(temp_db):
     temp_db.save_project(project)
 
     ledger = DecisionLedger(temp_db)
-    d1 = ledger.record_decision(
+    ledger.record_decision(
         project_id="p1",
         decision_id="D-01",
         title="Cache Layer",
@@ -75,7 +73,7 @@ def test_decision_supersede_preserves_history(temp_db):
     )
 
     # Supersede D-01 with Redis
-    d2 = ledger.supersede_decision(
+    ledger.supersede_decision(
         old_decision_id="D-01",
         new_decision_id="D-02",
         new_title="Cache Layer",

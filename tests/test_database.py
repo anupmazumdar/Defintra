@@ -3,16 +3,8 @@ import os
 import pytest
 from defintra.core.db.database import Database
 from defintra.core.models.entities import (
-    ApprovalLevel,
     ArtifactState,
-    ChangeRisk,
-    Component,
-    Conflict,
-    Contract,
     Decision,
-    DependencyEdge,
-    DependencyKind,
-    DiscoveryAuditEntry,
     EARSPattern,
     EntityType,
     Evidence,
@@ -21,8 +13,6 @@ from defintra.core.models.entities import (
     RejectedAlternative,
     Requirement,
     RequirementPriority,
-    SourceType,
-    Unknown,
 )
 
 

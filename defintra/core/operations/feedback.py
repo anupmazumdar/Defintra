@@ -5,10 +5,9 @@ originating requirements, contracts, and assumptions in the knowledge graph.
 """
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from defintra.core.db.database import Database
 from defintra.core.graph.engine import ProjectGraph
-from defintra.core.models.entities import ChangeRisk
 
 
 class IncidentTraceReport:
@@ -49,7 +48,6 @@ class IncidentTracer:
             raise ValueError(f"Project '{project_id}' not found.")
 
         reqs = self.db.get_requirements(project_id)
-        decs = self.db.get_decisions(project_id)
         asms = self.db.get_assumptions(project_id)
         comps = self.db.get_components(project_id)
         contracts = self.db.get_contracts(project_id)
@@ -78,7 +76,7 @@ class IncidentTracer:
                     "id": ct.id,
                     "type": "CONTRACT",
                     "title": ct.name,
-                    "relevance": f"Contract interface impacted by incident",
+                    "relevance": "Contract interface impacted by incident",
                 })
 
         for c in comps:
@@ -87,7 +85,7 @@ class IncidentTracer:
                     "id": c.id,
                     "type": "COMPONENT",
                     "title": c.name,
-                    "relevance": f"Component boundary where fault occurred",
+                    "relevance": "Component boundary where fault occurred",
                 })
 
         # 3. Check for refuted assumptions

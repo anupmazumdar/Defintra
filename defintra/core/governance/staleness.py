@@ -5,10 +5,10 @@ Proactively surfaces stale high-confidence items when dependencies change.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from defintra.core.db.database import Database
 from defintra.core.graph.engine import ProjectGraph
-from defintra.core.models.entities import EntityType, current_utc_time
+from defintra.core.models.entities import current_utc_time
 
 
 class StaleNodeReport:
@@ -87,7 +87,6 @@ class StalenessEngine:
         reqs = self.db.get_requirements(project_id)
         decs = self.db.get_decisions(project_id)
         asms = self.db.get_assumptions(project_id)
-        contracts = self.db.get_contracts(project_id)
 
         p_graph = ProjectGraph(self.db, project_id)
         audit_entries = self.db.get_audit_entries(project_id)

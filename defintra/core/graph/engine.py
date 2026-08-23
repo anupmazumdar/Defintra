@@ -4,7 +4,7 @@ Provides NetworkX-backed dependency graph representation, forward & reverse trac
 blast-radius impact analysis, confidence propagation, and Mermaid/ASCII rendering.
 """
 
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List
 import networkx as nx
 
 from defintra.core.db.database import Database
@@ -12,13 +12,8 @@ from defintra.core.models.entities import (
     ApprovalLevel,
     ArtifactState,
     ChangeRisk,
-    Component,
-    Contract,
-    Decision,
-    DependencyEdge,
     DependencyKind,
     EntityType,
-    Requirement,
 )
 
 

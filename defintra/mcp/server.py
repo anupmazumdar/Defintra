@@ -15,7 +15,6 @@ from defintra.core.brownfield.scanner import BrownfieldScanner
 from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
 from defintra.core.decisions.ledger import DecisionLedger
-from defintra.core.diff.engine import SpecDiffEngine
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.governance.stability import StabilityBudgetEngine
 from defintra.core.graph.engine import ProjectGraph

@@ -5,14 +5,9 @@ from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.core.models.entities import (
     ApprovalLevel,
     ArtifactState,
-    Assumption,
     ChangeRisk,
     Decision,
-    EARSPattern,
-    Requirement,
-    RequirementPriority,
 )
-from defintra.core.requirements.ears import EARSEngine
 
 
 @pytest.fixture

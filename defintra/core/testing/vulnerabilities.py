@@ -4,10 +4,8 @@ Converts discovered vulnerabilities and security audit findings into
 persistent, automated regression test suites.
 """
 
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from defintra.core.db.database import Database
-from defintra.core.models.entities import ChangeRisk, current_utc_time
 
 
 class SecurityVulnerability:
@@ -57,7 +55,6 @@ class VulnerabilityLifecycleManager:
             raise ValueError(f"Project '{project_id}' not found.")
 
         reqs = self.db.get_requirements(project_id)
-        comps = self.db.get_components(project_id)
         unwanted = [r for r in reqs if r.ears_pattern.value == "UNWANTED_BEHAVIOR"]
 
         code = [
@@ -100,7 +97,6 @@ class VulnerabilityLifecycleManager:
 
         if unwanted:
             for r in unwanted:
-                safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", r.id.lower())
                 code.append(f'    # [{r.id}] {r.title}')
                 code.append(f'    # Invariant: {r.description}')
                 code.append(f'    assert True, "Security boundary satisfied for {r.id}"')

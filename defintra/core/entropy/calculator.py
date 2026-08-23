@@ -6,7 +6,6 @@ providing actionable breakdown of unresolved ambiguity, pending unknowns, and ac
 
 from typing import Dict, List, Any
 from defintra.core.models.entities import (
-    Project,
     Requirement,
     Decision,
     Assumption,

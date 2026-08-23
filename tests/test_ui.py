@@ -1,7 +1,5 @@
-import io
 import json
 import threading
-import time
 import urllib.request
 import pytest
 from defintra.core.db.database import Database

@@ -4,16 +4,12 @@ Identifies contradictions between requirements, architectural decisions,
 and constraints, and provides deterministic resolution workflows.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 from defintra.core.db.database import Database
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.models.entities import (
     ArtifactState,
-    Assumption,
     Conflict,
-    Decision,
-    Requirement,
-    current_utc_time,
 )
 
 

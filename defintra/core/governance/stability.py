@@ -49,7 +49,6 @@ class StabilityBudgetEngine:
         if not project:
             raise ValueError(f"Project '{project_id}' not found.")
 
-        reqs = self.db.get_requirements(project_id)
         decs = self.db.get_decisions(project_id)
         comps = self.db.get_components(project_id)
         contracts = self.db.get_contracts(project_id)

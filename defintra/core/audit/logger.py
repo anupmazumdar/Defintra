@@ -4,7 +4,7 @@ Records silent assumptions that the discovery/questioning engine made without as
 explaining why they were skipped, their risk rating, and category.
 """
 
-from typing import List, Optional
+from typing import List
 from defintra.core.db.database import Database
 from defintra.core.models.entities import ChangeRisk, DiscoveryAuditEntry, current_utc_time
 

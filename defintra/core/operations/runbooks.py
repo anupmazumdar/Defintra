@@ -4,7 +4,7 @@ Generates operational runbooks for backup, disaster recovery,
 failover, and zero-downtime deployment.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, List
 from defintra.core.db.database import Database
 
 
@@ -35,7 +35,7 @@ class RunbookGenerator:
     def _backup_restore_runbook(self, project: Any, decs: List[Any], comps: List[Any]) -> str:
         db_choice = next((d.decision for d in decs if "database" in d.title.lower()), "Relational Database")
         lines = [
-            f"# Operations Runbook: Database Backup & Restore",
+            "# Operations Runbook: Database Backup & Restore",
             f"> **Project:** {project.name} | **Target Storage:** {db_choice}",
             "",
             "## 1. Automated Snapshot Schedule",
@@ -60,7 +60,7 @@ class RunbookGenerator:
 
     def _disaster_recovery_runbook(self, project: Any, comps: List[Any]) -> str:
         lines = [
-            f"# Operations Runbook: Failover & Disaster Recovery",
+            "# Operations Runbook: Failover & Disaster Recovery",
             f"> **Project:** {project.name} | **Components:** {len(comps)}",
             "",
             "## 1. Incident Severity Triage",
@@ -77,7 +77,7 @@ class RunbookGenerator:
 
     def _rollback_runbook(self, project: Any, comps: List[Any]) -> str:
         lines = [
-            f"# Operations Runbook: Zero-Downtime Rollback Procedure",
+            "# Operations Runbook: Zero-Downtime Rollback Procedure",
             f"> **Project:** {project.name}",
             "",
             "## 1. Rollback Triggers",

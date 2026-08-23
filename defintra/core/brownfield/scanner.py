@@ -7,7 +7,7 @@ data models, API endpoints, and dependencies into the Defintra Knowledge Graph.
 import os
 from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from defintra.core.db.database import Database
 from defintra.core.models.entities import (
@@ -19,9 +19,7 @@ from defintra.core.models.entities import (
     EARSPattern,
     EntityType,
     Project,
-    Provenance,
     RequirementPriority,
-    SourceType,
     current_utc_time,
 )
 from defintra.core.requirements.ears import EARSEngine

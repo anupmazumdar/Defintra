@@ -8,11 +8,10 @@ Locked Decisions + Dependencies + Explainable Inclusions/Exclusions.
 from enum import Enum
 import json
 import re
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
-from defintra.context.optimizer import TokenEstimator, TokenOptimizer
+from defintra.context.optimizer import TokenEstimator
 from defintra.core.db.database import Database
-from defintra.core.graph.engine import ProjectGraph
 from defintra.core.models.entities import (
     ArtifactState,
     Component,

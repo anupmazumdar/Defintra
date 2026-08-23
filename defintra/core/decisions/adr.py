@@ -6,9 +6,8 @@ and preserved disagreements.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict
 from defintra.core.db.database import Database
-from defintra.core.models.entities import Decision
 
 
 class ADRGenerator:
@@ -52,10 +51,10 @@ class ADRGenerator:
             "## Multi-Dimensional Evaluation Matrix (§11)",
             "| Architecture Dimension | Evaluation & Architectural Trade-off |",
             "| :--- | :--- |",
-            f"| **Scalability & Capacity** | Designed to meet project scalability targets with minimal operational complexity. |",
-            f"| **Security & Isolation** | Adheres to approved project security contracts and authentication policies. |",
-            f"| **Cost & Token Efficiency** | Minimizes unnecessary compute overhead and token footprint during context compilation. |",
-            f"| **Maintainability** | Clean decoupling prevents cascading changes across unrelated components. |",
+            "| **Scalability & Capacity** | Designed to meet project scalability targets with minimal operational complexity. |",
+            "| **Security & Isolation** | Adheres to approved project security contracts and authentication policies. |",
+            "| **Cost & Token Efficiency** | Minimizes unnecessary compute overhead and token footprint during context compilation. |",
+            "| **Maintainability** | Clean decoupling prevents cascading changes across unrelated components. |",
             f"| **Complexity Level** | Classified as **{target_dec.change_risk.value}** risk with clear boundary isolation. |",
             "",
             "## Preserved Disagreement & Rejected Alternatives (§10)",

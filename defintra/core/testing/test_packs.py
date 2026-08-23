@@ -4,9 +4,7 @@ Generates structured manual testing checklists, automated test suites,
 and security regression tests directly derived from EARS requirements.
 """
 
-from typing import Any, Dict, List, Optional
 from defintra.core.db.database import Database
-from defintra.core.models.entities import EARSPattern, Requirement, RequirementPriority
 
 
 class TestPackGenerator:
@@ -24,13 +22,10 @@ class TestPackGenerator:
             raise ValueError(f"Project '{project_id}' not found.")
 
         reqs = self.db.get_requirements(project_id)
-        decs = self.db.get_decisions(project_id)
-        contracts = self.db.get_contracts(project_id)
-
         md = [
             f"# Human Testing Pack — {project.name}",
             f"> **Objective:** {project.objective}",
-            f"> **Generated For:** Manual Verification & QA Sign-off",
+            "> **Generated For:** Manual Verification & QA Sign-off",
             "",
             "## 1. Pre-Flight Verification Checklist",
             "- [ ] Environment variables and secrets configured properly",
@@ -80,10 +75,10 @@ class TestPackGenerator:
         reqs = self.db.get_requirements(project_id)
 
         lines = [
-            f'"""',
+            '"""',
             f'Automated Test Suite for {project.name}',
-            f'Generated from Defintra EARS Requirements Engine (§26)',
-            f'"""',
+            'Generated from Defintra EARS Requirements Engine (§26)',
+            '"""',
             "",
             "import pytest",
             "",
@@ -94,14 +89,14 @@ class TestPackGenerator:
             lines.extend([
                 f"@pytest.mark.requirement('{r.id}')",
                 f"def test_requirement_{safe_id}():",
-                f'    """',
+                '    """',
                 f'    Requirement: {r.title} ({r.ears_pattern.value})',
                 f'    Rule: {r.description}',
-                f'    """',
+                '    """',
             ])
             for ac in r.acceptance_criteria:
                 lines.append(f"    # Verification: {ac}")
-                lines.append(f"    # TODO: Connect actual client / service assertion")
+                lines.append("    # TODO: Connect actual client / service assertion")
             lines.append("    assert True\n")
 
         return "\n".join(lines)
@@ -114,14 +109,11 @@ class TestPackGenerator:
         if not project:
             raise ValueError(f"Project '{project_id}' not found.")
 
-        reqs = self.db.get_requirements(project_id)
-        auth_reqs = [r for r in reqs if "auth" in r.title.lower() or "auth" in r.category.lower() or "security" in r.category.lower()]
-
         lines = [
-            f'"""',
+            '"""',
             f'Security Regression Suite for {project.name}',
-            f'Generated from Defintra Security Lifecycle (§28)',
-            f'"""',
+            'Generated from Defintra Security Lifecycle (§28)',
+            '"""',
             "",
             "import pytest",
             "",

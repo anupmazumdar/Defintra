@@ -4,10 +4,9 @@ Builds phased implementation roadmaps, parallel execution tracks,
 and critical path analyses for AI multi-agent software engineering.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from defintra.context.compiler import AgentRole
 from defintra.core.db.database import Database
-from defintra.core.models.entities import EntityType
 
 
 class ExecutionPhase:

@@ -4,10 +4,9 @@ Generates targeted post-deployment suggestions with expected benefit,
 change risk, estimated cost, and blast radius.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from defintra.core.db.database import Database
-from defintra.core.graph.engine import ProjectGraph
-from defintra.core.models.entities import ChangeRisk, EntityType
+from defintra.core.models.entities import ChangeRisk
 
 
 class ImprovementSuggestion:
@@ -63,7 +62,6 @@ class PostDeploymentAdvisor:
         reqs = self.db.get_requirements(project_id)
         decs = self.db.get_decisions(project_id)
         comps = self.db.get_components(project_id)
-        contracts = self.db.get_contracts(project_id)
 
         suggestions: List[ImprovementSuggestion] = []
 

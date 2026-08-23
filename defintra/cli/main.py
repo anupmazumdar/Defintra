@@ -6,23 +6,17 @@ Testing Packs, Sandboxing, AI Team Orchestration, Incident Feedback, Runbooks,
 Architecture Stability Budget, and Semantic Spec Diffing.
 """
 
-import json
 from pathlib import Path
 from typing import Optional
 import typer
-from rich import print
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
-from rich.tree import Tree
 
 from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
-from defintra.core.audit.logger import DiscoveryAuditLogger
 from defintra.core.brownfield.scanner import BrownfieldScanner
 from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
-from defintra.core.decisions.ledger import DecisionLedger
 from defintra.core.diff.engine import SpecDiffEngine
 from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.core.discovery.llm import DeepPathEngine
@@ -35,7 +29,7 @@ from defintra.core.operations.feedback import IncidentTracer
 from defintra.core.operations.improvements import PostDeploymentAdvisor
 from defintra.core.operations.runbooks import RunbookGenerator
 from defintra.core.sandbox.manager import SandboxManager
-from defintra.core.team.coordinator import StructuredEventType, TeamCoordinator
+from defintra.core.team.coordinator import TeamCoordinator
 from defintra.core.testing.test_packs import TestPackGenerator
 from defintra.export.exporter import Exporter
 from defintra.ui.server import start_ui_server
@@ -645,7 +639,7 @@ def blast_radius(
             f"[bold]Required Approval:[/bold] {report.approval_required.value}\n\n"
             f"[bold]Explicitly Unaffected Components ({len(report.unaffected_components)}):[/bold]\n"
             f"[dim]{', '.join(report.unaffected_components) or 'None'}[/dim]",
-            title=f"Impact Analysis & Blast Radius (§14)",
+            title="Impact Analysis & Blast Radius (§14)",
             border_style=color,
         )
     )

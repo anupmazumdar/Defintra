@@ -4,10 +4,9 @@ Manages local SQLite database, transactions, entity CRUD, and dependency graph p
 """
 
 import json
-import os
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from defintra.core.models.entities import (
     ApprovalLevel,
@@ -29,9 +28,7 @@ from defintra.core.models.entities import (
     RejectedAlternative,
     Requirement,
     RequirementPriority,
-    SourceType,
     Unknown,
-    current_utc_time,
 )
 
 

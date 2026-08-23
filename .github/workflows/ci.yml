@@ -29,11 +29,31 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
 
+    - name: Run Module Import Sweep
+      run: |
+        python -c "
+        import importlib, pkgutil, defintra
+        errors = []
+        for finder, name, ispkg in pkgutil.walk_packages(defintra.__path__, defintra.__name__ + '.'):
+            try:
+                importlib.import_module(name)
+            except Exception as e:
+                errors.append((name, str(e)))
+        if errors:
+            print('Import failures detected:', errors)
+            exit(1)
+        print('All Defintra modules imported cleanly!')
+        "
+
+    - name: Run Ruff Linter Check
+      run: |
+        ruff check defintra tests
+
     - name: Run Test Suite
       run: |
         python -m pytest tests/ -v --cov=defintra --cov-report=term-missing
 
-    - name: Validate CLI Execution
+    - name: Validate CLI Execution & Governance Gate
       run: |
         python -m defintra --help
         defintra init "CI Test Project"
@@ -41,3 +61,11 @@ jobs:
         defintra status
         defintra compile "Test auth service" --role BACKEND_ENGINEER --target claude
         defintra export --out .defintra/ci_export
+        defintra adr
+        defintra schedule
+        defintra contracts
+        defintra staleness
+        defintra advise
+        defintra recover
+        defintra snapshot --create v1.0.0
+        defintra gate

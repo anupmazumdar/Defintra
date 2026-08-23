@@ -6,7 +6,7 @@ highlighting breaking contract changes, new requirements, and modified decisions
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class SpecDiffReport:

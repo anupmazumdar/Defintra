@@ -5,9 +5,8 @@ Serves the rich dark-mode Defintra Control Center and provides JSON REST API.
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 import urllib.parse
 import webbrowser
 
@@ -21,7 +20,6 @@ from defintra.core.graph.engine import ProjectGraph
 from defintra.core.operations.feedback import IncidentTracer
 from defintra.core.operations.runbooks import RunbookGenerator
 from defintra.core.team.coordinator import TeamCoordinator
-from defintra.export.exporter import Exporter
 
 
 class DefintraAPIHandler(BaseHTTPRequestHandler):

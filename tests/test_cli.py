@@ -3,7 +3,6 @@ import os
 import gc
 import json
 import shutil
-import pytest
 from typer.testing import CliRunner
 from defintra.cli.main import app
 

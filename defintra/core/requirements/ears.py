@@ -4,7 +4,7 @@ Provides parsing, classification, validation, formatting, and decomposition for 
 """
 
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from defintra.core.models.entities import EARSPattern, Requirement, RequirementPriority, Provenance, ArtifactState
 

@@ -5,13 +5,10 @@ import pytest
 from defintra.core.db.database import Database
 from defintra.core.graph.engine import ProjectGraph
 from defintra.core.models.entities import (
-    ApprovalLevel,
     ArtifactState,
-    ChangeRisk,
     Component,
     Decision,
     DependencyEdge,
-    DependencyKind,
     EARSPattern,
     EntityType,
     Project,

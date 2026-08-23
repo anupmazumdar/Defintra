@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from defintra.core.brownfield.scanner import BrownfieldScanner
 from defintra.core.db.database import Database
 

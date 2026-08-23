@@ -5,7 +5,7 @@ EARS requirement decomposition, and adaptive questioning queue.
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 
 from defintra.core.audit.logger import DiscoveryAuditLogger
 from defintra.core.db.database import Database
@@ -14,20 +14,14 @@ from defintra.core.entropy.calculator import EntropyCalculator, SpecHealthReport
 from defintra.core.models.entities import (
     ApprovalLevel,
     ArtifactState,
-    Assumption,
     ChangeRisk,
     Component,
-    Contract,
-    Decision,
     DependencyEdge,
     DependencyKind,
-    DiscoveryAuditEntry,
     EARSPattern,
     EntityType,
     Project,
-    Provenance,
     RejectedAlternative,
-    Requirement,
     RequirementPriority,
     SourceType,
     Unknown,
