@@ -259,3 +259,17 @@ class DeepPathEngine:
             unknowns.append(unk)
 
         return reqs, unknowns
+
+
+def get_llm_provider(model_name: Optional[str] = None) -> BaseLLMProvider:
+    """
+    Returns an instantiated LLM provider based on environment API keys or requested model (§19).
+    Falls back gracefully to MockHeuristicLLMProvider if no API keys are present.
+    """
+    if os.environ.get("OPENAI_API_KEY"):
+        return OpenAILLMProvider(model=model_name or "gpt-4o")
+    elif os.environ.get("GEMINI_API_KEY"):
+        return GeminiLLMProvider(model=model_name or "gemini-1.5-flash")
+    elif os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicLLMProvider(model=model_name or "claude-3-5-sonnet-20241022")
+    return MockHeuristicLLMProvider()

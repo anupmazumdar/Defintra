@@ -143,13 +143,31 @@ class TeamCoordinator:
         # 2. Get Model Routing recommendation
         routing = self.route_model(role, task_complexity)
 
-        # 3. Record event in SQLite audit_events
+        # 3. Real AI Execution (§16, §17, §19, §24)
+        from defintra.context.compiler import TargetFormat
+        from defintra.core.discovery.llm import get_llm_provider
+        provider = get_llm_provider(routing.recommended_model)
+        system_prompt = (
+            f"You are the {role.value} on the Defintra autonomous engineering team. "
+            f"Execute the task using the provided minimum sufficient context."
+        )
+        prompt = compiled.render(TargetFormat.MARKDOWN)
+        llm_resp = provider.generate(prompt=prompt, system_prompt=system_prompt)
+        execution_output = llm_resp.content
+
+        # 4. Record event in SQLite audit_events
         event = self.record_event(
             project_id=project_id,
-            event_type=StructuredEventType.CHANGE_REQUEST,
+            event_type=StructuredEventType.TASK_COMPLETED,
             actor_role=role,
-            summary=f"Dispatched task '{task_title}' to role {role.value}",
-            payload={"task": task_title, "role": role.value, "routing": routing.to_dict()},
+            summary=f"Executed task '{task_title}' with role {role.value} via {provider.__class__.__name__}",
+            payload={
+                "task": task_title,
+                "role": role.value,
+                "routing": routing.to_dict(),
+                "execution_output_snippet": execution_output[:300],
+                "provider": provider.__class__.__name__,
+            },
         )
 
         return {
@@ -163,6 +181,8 @@ class TeamCoordinator:
                 "decisions_count": len(compiled.decisions),
                 "token_count": compiled.token_count,
             },
+            "execution_output": execution_output,
+            "provider": provider.__class__.__name__,
             "initial_event": event.to_dict(),
         }
 

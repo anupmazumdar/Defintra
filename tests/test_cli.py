@@ -106,7 +106,8 @@ def test_cli_expanded_commands(monkeypatch):
         # 6. Team Dispatch
         res_team = runner.invoke(app, ["team", "Design API Gateway", "--role", "SOFTWARE_ARCHITECT"])
         assert res_team.exit_code == 0
-        assert "AI Team Collaboration Dispatch" in res_team.output
+        assert "AI Team Collaboration" in res_team.output
+        assert "Agent Execution Response Snippet" in res_team.output
 
         # 7. Incident Traceback
         res_incident = runner.invoke(app, ["incident", "Database connection timeout during authentication"])
@@ -247,7 +248,18 @@ def test_cli_governance_and_new_commands(monkeypatch):
         res_route = runner.invoke(app, ["route", "BACKEND_ENGINEER", "--complexity", "HIGH"])
         assert res_route.exit_code == 0
         assert "AI Model Routing Recommendation" in res_route.output
-        assert "Recommended AI Model" in res_route.output
+        # Test Policy CLI commands (§45)
+        res_policy_check_allow = runner.invoke(app, ["policy", "check", "read_repository"])
+        assert res_policy_check_allow.exit_code == 0
+        assert "ALLOW" in res_policy_check_allow.output
+
+        res_policy_check_approval = runner.invoke(app, ["policy", "check", "deploy"])
+        assert res_policy_check_approval.exit_code == 0
+        assert "REQUIRES_APPROVAL" in res_policy_check_approval.output
+
+        res_policy_list = runner.invoke(app, ["policy", "list"])
+        assert res_policy_list.exit_code == 0
+        assert "Autonomous Agent Governance & Action Policy Table" in res_policy_list.output
 
         # Test failure case on missing project
         res_gate_no_proj = runner.invoke(app, ["gate", "--project", "non_existent_proj_id"])

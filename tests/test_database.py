@@ -35,19 +35,33 @@ def temp_db():
 
 
 def test_project_crud(temp_db):
-    project = Project(
-        id="proj_test",
-        name="Test Project",
+    # Without owner_id
+    project1 = Project(
+        id="proj_test_1",
+        name="Test Project Without Owner",
         objective="Verify SQLite database CRUD",
         domain="SAAS",
         source_type="idea",
     )
-    temp_db.save_project(project)
+    temp_db.save_project(project1)
+    retrieved1 = temp_db.get_project("proj_test_1")
+    assert retrieved1 is not None
+    assert retrieved1.owner_id is None
 
-    retrieved = temp_db.get_project("proj_test")
-    assert retrieved is not None
-    assert retrieved.name == "Test Project"
-    assert retrieved.domain == "SAAS"
+    # With owner_id (§45 Multiplayer ready)
+    project2 = Project(
+        id="proj_test_2",
+        name="Test Project With Owner",
+        objective="Verify multi-author forward compatibility",
+        owner_id="user_admin_99",
+        domain="FINTECH",
+        source_type="repo",
+    )
+    temp_db.save_project(project2)
+    retrieved2 = temp_db.get_project("proj_test_2")
+    assert retrieved2 is not None
+    assert retrieved2.owner_id == "user_admin_99"
+    assert retrieved2.domain == "FINTECH"
 
 
 def test_requirement_with_evidence(temp_db):

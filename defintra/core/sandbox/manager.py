@@ -7,10 +7,11 @@ snapshot hashes, and pre-production governance gates.
 import hashlib
 import uuid
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from defintra.core.db.database import Database
 from defintra.core.models.entities import current_utc_time
+from defintra.core.policy.engine import PolicyDecision, PolicyEngine
 
 
 class SandboxState:
@@ -49,6 +50,7 @@ class SandboxManager:
         self.db = db
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.policy_engine = PolicyEngine(db)
 
     def create_sandbox(
         self,
@@ -79,6 +81,17 @@ class SandboxManager:
 
         return sandbox
 
+    def evaluate_sandbox_action(
+        self,
+        project_id: str,
+        action_type: str,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> PolicyDecision:
+        """
+        Consults the Policy Engine before an agent performs an action in the sandbox (§25, §45).
+        """
+        return self.policy_engine.evaluate_action(project_id, action_type, context=context)
+
     def validate_governance_gate(
         self,
         project_id: str,
@@ -87,17 +100,21 @@ class SandboxManager:
         security_sign_off: bool = True,
     ) -> Dict[str, Any]:
         """
-        Pre-production deployment gate verification (§29).
+        Pre-production deployment gate verification (§29, §45).
         """
         project = self.db.get_project(project_id)
         if not project:
             return {"ready_for_merge": False, "error": "Project not found"}
+
+        # Check policy for deployment action
+        deploy_policy = self.policy_engine.evaluate_action(project_id, "deploy")
 
         checks = {
             "snapshot_verified": bool(sandbox.snapshot_hash),
             "test_suite_passed": test_results_pass,
             "security_sign_off": security_sign_off,
             "entropy_within_threshold": project.spec_entropy <= 0.6,
+            "policy_governance_satisfied": deploy_policy.decision.value != "DENY",
         }
 
         all_passed = all(checks.values())
@@ -107,3 +124,4 @@ class SandboxManager:
             "governance_status": "APPROVED" if all_passed else "BLOCKED",
             "rollback_plan_ready": True,
         }
+

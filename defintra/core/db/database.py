@@ -50,6 +50,10 @@ class Database:
             schema_sql = schema_path.read_text(encoding="utf-8")
             with self._get_connection() as conn:
                 conn.executescript(schema_sql)
+                try:
+                    conn.execute("ALTER TABLE projects ADD COLUMN owner_id TEXT;")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
                 conn.commit()
 
     # ==========================================
@@ -59,11 +63,12 @@ class Database:
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO projects (id, name, objective, domain, source_type, spec_entropy, spec_health_score, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO projects (id, name, objective, owner_id, domain, source_type, spec_entropy, spec_health_score, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name=excluded.name,
                     objective=excluded.objective,
+                    owner_id=excluded.owner_id,
                     domain=excluded.domain,
                     source_type=excluded.source_type,
                     spec_entropy=excluded.spec_entropy,
@@ -74,6 +79,7 @@ class Database:
                     project.id,
                     project.name,
                     project.objective,
+                    project.owner_id,
                     project.domain,
                     project.source_type,
                     project.spec_entropy,
@@ -93,6 +99,7 @@ class Database:
                 id=row["id"],
                 name=row["name"],
                 objective=row["objective"],
+                owner_id=row["owner_id"] if "owner_id" in row.keys() else None,
                 domain=row["domain"],
                 source_type=row["source_type"],
                 spec_entropy=row["spec_entropy"],
@@ -110,6 +117,7 @@ class Database:
                 id=row["id"],
                 name=row["name"],
                 objective=row["objective"],
+                owner_id=row["owner_id"] if "owner_id" in row.keys() else None,
                 domain=row["domain"],
                 source_type=row["source_type"],
                 spec_entropy=row["spec_entropy"],

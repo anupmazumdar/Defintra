@@ -362,15 +362,17 @@ def team(
     res = coordinator.dispatch_task(project.id, task, agent_role)
 
     routing = res["routing"]
+    exec_snippet = res.get("execution_output", "")[:250]
     console.print(
         Panel(
             f"[bold]Dispatch ID:[/bold] {res['dispatch_id']}\n"
             f"[bold]Task:[/bold] {res['task']}\n"
             f"[bold]Assigned Role:[/bold] [cyan]{res['assigned_role']}[/cyan]\n"
-            f"[bold]Recommended AI Model:[/bold] [green]{routing['recommended_model']}[/green]\n"
+            f"[bold]AI Execution Engine:[/bold] [bold green]{res.get('provider', 'MockHeuristicLLMProvider')}[/bold green] (Model: {routing['recommended_model']})\n"
             f"[bold]Routing Rationale:[/bold] {routing['reason']}\n"
-            f"[bold]Context Compiled:[/bold] {res['compiled_context_summary']['requirements_count']} requirements, {res['compiled_context_summary']['decisions_count']} decisions ({res['compiled_context_summary']['token_count']} tokens)",
-            title="AI Team Collaboration Dispatch (§16, §17)",
+            f"[bold]Context Compiled:[/bold] {res['compiled_context_summary']['requirements_count']} requirements, {res['compiled_context_summary']['decisions_count']} decisions ({res['compiled_context_summary']['token_count']} tokens)\n\n"
+            f"[bold]Agent Execution Response Snippet:[/bold]\n[dim]{exec_snippet}...[/dim]",
+            title="AI Team Collaboration & Task Execution (§16, §17)",
             border_style="cyan",
         )
     )
@@ -1149,6 +1151,110 @@ def gate(
         raise typer.Exit(1)
     else:
         console.print("[bold green]All pre-production criteria satisfied! Safe to merge and deploy.[/bold green]")
+
+
+policy_app = typer.Typer(help="Autonomous agent governance and action policy engine (§45)")
+app.add_typer(policy_app, name="policy")
+
+sandbox_app = typer.Typer(help="Sandbox and staging execution environment manager (§25)")
+app.add_typer(sandbox_app, name="sandbox")
+
+
+@policy_app.command(name="check")
+def policy_check(
+    action: str = typer.Argument(..., help="Action type to evaluate (e.g. read_repository, modify_file, execute_shell, deploy, access_secret)"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Evaluate an action request against the governance policy engine (§45).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    p_id = project.id if project else "default"
+
+    from defintra.core.policy.engine import PolicyEngine
+    pe = PolicyEngine(db)
+    decision = pe.evaluate_action(p_id, action)
+
+    color = "green" if decision.decision.value == "ALLOW" else ("red" if decision.decision.value == "DENY" else "yellow")
+    console.print(
+        Panel(
+            f"[bold]Action Type:[/bold] {decision.action_type}\n"
+            f"[bold]Governance Decision:[/bold] [{color}]{decision.decision.value}[/]\n"
+            f"[bold]Risk Level:[/bold] {decision.risk_level.value}\n"
+            f"[bold]Required Approval:[/bold] {decision.required_approval.value}\n"
+            f"[bold]Rationale:[/bold] {decision.reason}",
+            title="Agent Governance Policy Evaluation (§45)",
+            border_style=color,
+        )
+    )
+
+
+@policy_app.command(name="list")
+def policy_list(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    List all configured governance policies and action permissions (§45).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    p_id = project.id if project else None
+
+    from defintra.core.policy.engine import PolicyEngine
+    pe = PolicyEngine(db)
+    policies = pe.list_policies(p_id)
+
+    table = Table(title="Autonomous Agent Governance & Action Policy Table (§45)")
+    table.add_column("Action Type", style="cyan", no_wrap=True)
+    table.add_column("Decision", style="bold")
+    table.add_column("Risk Level", style="magenta")
+    table.add_column("Required Approval", style="yellow")
+    table.add_column("Description", style="white")
+
+    for p in policies:
+        color = "green" if p.decision.value == "ALLOW" else ("red" if p.decision.value == "DENY" else "yellow")
+        table.add_row(
+            p.action_type,
+            f"[{color}]{p.decision.value}[/]",
+            p.risk_level.value,
+            p.required_approval.value,
+            p.description,
+        )
+
+    console.print(table)
+
+
+@sandbox_app.command(name="create")
+def sandbox_create(
+    task: str = typer.Option("task_execution", "--task", "-t", help="Task ID to sandbox"),
+    isolation: str = typer.Option("git_branch", "--type", help="Isolation type (git_branch, worktree, directory)"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Create an isolated staging sandbox for a risky agent implementation (§25).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.sandbox.manager import SandboxManager
+    sbx = SandboxManager(db)
+    res = sbx.create_sandbox(project.id, task_id=task, isolation_type=isolation)
+    console.print(
+        Panel(
+            f"[bold]Sandbox ID:[/bold] {res.sandbox_id}\n"
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]Branch:[/bold] [cyan]{res.branch_name}[/cyan]\n"
+            f"[bold]Isolation:[/bold] {res.isolation_type}\n"
+            f"[bold]Snapshot Hash:[/bold] [dim]{res.snapshot_hash}[/dim]\n"
+            f"[bold]Status:[/bold] [green]{res.status}[/green]",
+            title="Isolated Sandbox Created (§25)",
+            border_style="green",
+        )
+    )
 
 
 @app.command(name="ui")

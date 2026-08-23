@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     objective TEXT NOT NULL,
+    owner_id TEXT,
     domain TEXT DEFAULT 'GENERAL',
     source_type TEXT DEFAULT 'idea', -- 'idea' or 'repo' (brownfield ready)
     spec_entropy REAL DEFAULT 1.0,
@@ -147,6 +148,18 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS policies (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    action_type TEXT NOT NULL,
+    decision TEXT NOT NULL, -- 'ALLOW', 'DENY', 'REQUIRES_APPROVAL'
+    risk_level TEXT DEFAULT 'MEDIUM',
+    required_approval TEXT DEFAULT 'USER',
+    description TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(project_id, action_type)
+);
+
 -- Indexes for efficient graph and entity lookups
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirements(project_id);
 CREATE INDEX IF NOT EXISTS idx_dec_project ON decisions(project_id);
@@ -156,3 +169,5 @@ CREATE INDEX IF NOT EXISTS idx_evi_target ON evidence(target_entity_type, target
 CREATE INDEX IF NOT EXISTS idx_dep_src ON dependencies(source_type, source_id);
 CREATE INDEX IF NOT EXISTS idx_dep_tgt ON dependencies(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_dep_proj ON dependencies(project_id);
+CREATE INDEX IF NOT EXISTS idx_pol_proj ON policies(project_id);
+

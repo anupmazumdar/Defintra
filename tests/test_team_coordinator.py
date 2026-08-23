@@ -25,7 +25,7 @@ def test_team_coordinator_dispatch_and_routing(test_db):
     routing_qa = coordinator.route_model(AgentRole.QA_ENGINEER)
     assert "Gemini" in routing_qa.recommended_model
 
-    # 2. Task dispatch
+    # 2. Task dispatch & Execution
     dispatch = coordinator.dispatch_task(
         project_id=project.id,
         task_title="Design database schema and isolation model",
@@ -34,8 +34,12 @@ def test_team_coordinator_dispatch_and_routing(test_db):
     assert dispatch["assigned_role"] == "DATABASE_ENGINEER"
     assert "routing" in dispatch
     assert dispatch["compiled_context_summary"]["requirements_count"] > 0
+    assert "execution_output" in dispatch
+    assert len(dispatch["execution_output"]) > 0
+    assert dispatch["provider"] == "MockHeuristicLLMProvider"
 
     # 3. Events log check
     events = coordinator.get_events(project.id)
     assert len(events) >= 1
-    assert events[0]["event_type"] == StructuredEventType.CHANGE_REQUEST.value
+    assert events[0]["event_type"] == StructuredEventType.TASK_COMPLETED.value
+    assert "execution_output_snippet" in events[0]["data"]

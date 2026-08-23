@@ -239,6 +239,7 @@ class Project(BaseModel):
     id: str
     name: str
     objective: str
+    owner_id: Optional[str] = None  # Multiplayer & Multi-author forward-compatible (§45)
     domain: str = "GENERAL"
     source_type: str = "idea"  # "idea" or "repo" (Brownfield ready §45)
     spec_entropy: float = 1.0  # 0.0 (perfect) to 1.0 (pure entropy)
