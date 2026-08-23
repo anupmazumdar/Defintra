@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DefintraIntermediateRepresentation",
+  "description": "Canonical machine-actionable representation of project state and requirements (DIR v1)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "health",
+    "requirements",
+    "decisions",
+    "assumptions",
+    "unknowns",
+    "components",
+    "contracts"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "project": {
+      "type": "object",
+      "required": ["id", "name", "objective"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "objective": { "type": "string" },
+        "domain": { "type": "string" },
+        "source_type": { "type": "string", "enum": ["idea", "repo"] }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["entropy", "health_score"],
+      "properties": {
+        "entropy": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "health_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "recommendations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "description", "ears_pattern", "priority", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "ears_pattern": {
+            "type": "string",
+            "enum": [
+              "UBIQUITOUS",
+              "EVENT_DRIVEN",
+              "STATE_DRIVEN",
+              "OPTIONAL_FEATURE",
+              "UNWANTED_BEHAVIOR",
+              "COMPLEX"
+            ]
+          },
+          "priority": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+          "status": { "type": "string" },
+          "category": { "type": "string" },
+          "affected_components": { "type": "array", "items": { "type": "string" } },
+          "constraints": { "type": "array", "items": { "type": "string" } },
+          "acceptance_criteria": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "decision", "reason", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "decision": { "type": "string" },
+          "reason": { "type": "string" },
+          "rejected_alternatives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["alternative", "reason_rejected"],
+              "properties": {
+                "alternative": { "type": "string" },
+                "reason_rejected": { "type": "string" },
+                "proposed_by": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "status": { "type": "string" },
+          "approval_level": { "type": "string" },
+          "change_risk": { "type": "string" },
+          "superseded_by": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "confidence", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "statement": { "type": "string" },
+          "category": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "question", "impact", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "question": { "type": "string" },
+          "impact": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+          "category": { "type": "string" },
+          "status": { "type": "string" },
+          "resolution": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "component_type"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "component_type": { "type": "string" },
+          "description": { "type": "string" },
+          "stability_state": { "type": "string" },
+          "blast_radius": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "contract_type", "version"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "contract_type": { "type": "string" },
+          "version": { "type": "string" },
+          "specification": { "type": "object" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "description", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "entity_a_ref": { "type": "string" },
+          "entity_b_ref": { "type": "string" },
+          "severity": { "type": "string" },
+          "status": { "type": "string" },
+          "resolution": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "discovery_audit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "silent_assumption", "reason_skipped"],
+        "properties": {
+          "id": { "type": "string" },
+          "silent_assumption": { "type": "string" },
+          "reason_skipped": { "type": "string" },
+          "risk_level": { "type": "string" },
+          "category": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "defintra"
+version = "0.1.0"
+description = "Project intelligence and control layer for AI software engineering"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Defintra Team" }
+]
+dependencies = [
+    "pydantic>=2.5.0",
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "networkx>=3.2",
+    "jsonschema>=4.20.0",
+    "httpx>=0.25.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0"
+]
+
+[project.scripts]
+defintra = "defintra.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["defintra*"]

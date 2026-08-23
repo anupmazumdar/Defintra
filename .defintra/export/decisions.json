@@ -1,0 +1,19 @@
+[
+  {
+    "id": "D-001_campus_attendance_system",
+    "title": "Database Engine",
+    "decision": "SQLite / PostgreSQL",
+    "reason": "ACID transactional safety for attendance and grade records",
+    "rejected_alternatives": [
+      {
+        "alternative": "MongoDB",
+        "reason_rejected": "Lack of relational integrity for enrollment",
+        "proposed_by": null
+      }
+    ],
+    "status": "PROPOSED",
+    "approval_level": "USER",
+    "change_risk": "MEDIUM",
+    "superseded_by": null
+  }
+]

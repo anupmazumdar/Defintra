@@ -1,0 +1,26 @@
+[
+  {
+    "id": "UNK-001_campus_attendance_system",
+    "question": "What is the deployment environment? (Local demo, university intranet, or public cloud)?",
+    "impact": "HIGH",
+    "category": "ARCHITECTURE",
+    "status": "OPEN",
+    "resolution": null
+  },
+  {
+    "id": "UNK-002_campus_attendance_system",
+    "question": "What authentication method should be used? (Email/password, College SSO/SAML, or Roll Number/PIN)?",
+    "impact": "MEDIUM",
+    "category": "SECURITY",
+    "status": "OPEN",
+    "resolution": null
+  },
+  {
+    "id": "UNK-003_campus_attendance_system",
+    "question": "Does attendance verification require QR codes, Geofencing, or Manual faculty entry?",
+    "impact": "MEDIUM",
+    "category": "SECURITY",
+    "status": "OPEN",
+    "resolution": null
+  }
+]
