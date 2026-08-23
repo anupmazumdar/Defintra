@@ -219,10 +219,28 @@ defintra sandbox create --task "auth_refactor"
 defintra blast-radius "D-001"
 ```
 
-### Export & Portability
+### Export & Agent Rules
 ```bash
 # Export knowledge graph to JSON DIR schema and human-readable Markdown
 defintra export --out .defintra/export
+
+# Directly export targeted agent rules for AI IDEs
+defintra export --rules cursor   # Generates .cursorrules
+defintra export --rules claude   # Generates CLAUDE.md
+defintra export --rules agents   # Generates AGENTS.md
+```
+
+### Governance, Advisory & Self-Healing Recovery
+```bash
+# Check confidence decay and stale knowledge graph nodes (§9)
+defintra staleness
+defintra staleness --revalidate REQ-001
+
+# Generate post-deployment continuous improvement advisory (§32)
+defintra advise
+
+# Diagnose systemic failure modes & execute self-healing remediation (§48)
+defintra recover
 ```
 
 ---
@@ -240,66 +258,24 @@ defintra mcp
 python -m defintra.mcp.server
 ```
 
-### Adding to Claude Desktop (`claude_desktop_config.json`)
-```json
-{
-  "mcpServers": {
-    "defintra": {
-      "command": "defintra",
-      "args": ["mcp"],
-      "env": {}
-    }
-  }
-}
-```
-
-### Adding to Cursor (`~/.cursor/mcp.json`)
-```json
-{
-  "mcpServers": {
-    "defintra": {
-      "command": "python",
-      "args": ["-m", "defintra.mcp.server"]
-    }
-  }
-}
-```
-
 ### Available MCP Tools
 
 | Tool | Parameters | Description |
 | :--- | :--- | :--- |
-| `defintra_compile_context` | `task`, `role`, `target`, `max_tokens` | Compiles the optimal minimum sufficient context for an agent task. |
-| `defintra_get_graph` | `node_type` (optional) | Retrieves current knowledge graph nodes and edge relations. |
-| `defintra_get_health` | _none_ | Returns the current Spec Health score, entropy, and pending issues. |
-| `defintra_add_decision` | `title`, `decision`, `rationale`, `alternatives` | Records an architectural decision with preserved disagreement. |
-| `defintra_add_requirement`| `title`, `statement`, `ears_type`, `criteria` | Adds a formal EARS requirement to the project graph. |
-| `defintra_answer_unknown` | `unknown_id`, `answer` | Resolves an open unknown, updating confidence and reducing entropy. |
-
----
-
-## 🧩 Core Architecture & Concepts
-
-### 1. The EARS Requirement Notation
-Requirements are structured using the **Easy Approach to Requirements Syntax (EARS)** standard:
-- **Ubiquitous**: *The system shall [response].*
-- **Event-Driven**: *WHEN [event], the system shall [response].*
-- **State-Driven**: *WHILE [state], the system shall [response].*
-- **Optional**: *WHERE [feature is enabled], the system shall [response].*
-- **Unwanted Behavior**: *IF [error/exception], THEN the system shall [response].*
-
-### 2. The Decision Ledger
-Decisions in Defintra preserve rejected alternatives and reasoning alongside the accepted choice:
-- **Decision Record**: Unique ID, Title, Accepted Choice, Rationale, Author.
-- **Preserved Disagreements**: List of considered alternatives, trade-offs, and why they were rejected.
-- **Supersession**: Traceable lineage when decisions evolve over time.
-
-### 3. Minimum Sufficient Context (MSC)
-Rather than passing an entire repository to an LLM, Defintra calculates the subgraph reachable from the task's focal components:
-1. **Subgraph Extraction**: Identifies relevant requirements, decisions, contracts, and component interfaces.
-2. **Role Filtering**: Prunes details irrelevant to the agent's specific role (e.g. hiding CSS tokens from a backend engineer).
-3. **Target Formatting**: Formats syntax specifically for the target model (e.g., Claude `<defintra_context>` XML tags or OpenAI Markdown headers).
-4. **Token Packing**: Enforces hard token constraints via greedy priority knapsack allocation.
+| `compile_context` | `task_description`, `role`, `target_format`, `max_tokens` | Compiles the optimal minimum sufficient context for an agent task. |
+| `get_project_state` | `project_id` | Retrieves current knowledge graph state, entities, and health score. |
+| `calculate_blast_radius` | `node_id` | Calculates downstream blast radius, risk level, and required approvals. |
+| `propose_decision` | `decision_id`, `title`, `decision`, `reason`, `rejected_alternatives` | Records an architectural decision with preserved disagreement. |
+| `detect_conflicts` | `project_id` | Automatically detects contradictory requirements and incompatible decisions. |
+| `resolve_conflict` | `conflict_id`, `resolution_notes`, `winning_entity_id` | Resolves a conflict, archiving the losing variant and updating the graph. |
+| `generate_test_pack` | `pack_type` (`human`, `automated`, `security`) | Generates structured human testing checklists or pytest scaffolds. |
+| `dispatch_team_task` | `task`, `role` | Orchestrates role-specific subagent execution with isolated context. |
+| `trace_incident` | `error_text` | Traces runtime stack traces back to root-cause requirements or assumptions. |
+| `generate_runbook` | `runbook_type` (`backup`, `deployment`, `failover`, `restore`) | Generates executable step-by-step operations runbooks. |
+| `check_stability_budget`| `project_id` | Evaluates architectural churn velocity against stability thresholds. |
+| `check_staleness` | `project_id` | Tracks confidence decay and surfaces outdated items when dependents mutate. |
+| `get_improvements` | `project_id` | Generates prioritized post-deployment performance and reliability recommendations. |
+| `diagnose_recovery` | `project_id` | Diagnoses systemic contradictions, entropy spikes, or churn breaches. |
 
 ---
 
@@ -315,9 +291,15 @@ python -m pytest
 python -m pytest --cov=defintra tests/
 ```
 
-All 38 test suites pass consistently across:
+All **43 test suites** pass consistently across:
 - `test_brownfield.py` — AST & framework route ingestion
 - `test_compiler.py` — Context compilation and token pruning
+- `test_conflicts.py` — Contradiction and incompatible decision engine
+- `test_governance_and_recovery.py` — Confidence decay, staleness, post-deployment advisor, and failure recovery
+- `test_operations.py` — Incident feedback loop & runbook generation
+- `test_stability_and_diff.py` — Churn budgets & semantic specification diffing
+- `test_testing_and_sandbox.py` — Test pack generator & isolated Git sandboxes
+- `test_ui.py` — Control Center REST endpoints and browser dashboard
 - `test_conflicts.py` — Contradiction detection & resolution
 - `test_database.py` — SQLite schema and graph persistence
 - `test_decisions.py` — Decision ledger & disagreement tracking

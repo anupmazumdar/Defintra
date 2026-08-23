@@ -364,6 +364,9 @@
       <button class="nav-tab" onclick="switchTab('incident')">Incident Tracer</button>
       <button class="nav-tab" onclick="switchTab('operations')">Runbooks</button>
       <button class="nav-tab" onclick="switchTab('stability')">Stability Budget</button>
+      <button class="nav-tab" onclick="switchTab('staleness')">Staleness & Confidence</button>
+      <button class="nav-tab" onclick="switchTab('improvements')">Continuous Improvements</button>
+      <button class="nav-tab" onclick="switchTab('recovery')">Failure Recovery</button>
     </nav>
   </header>
 
@@ -611,6 +614,68 @@
         </div>
       </div>
     </section>
+
+    <!-- 12. CONFIDENCE & STALENESS TAB -->
+    <section id="tab-staleness" class="tab-content">
+      <div class="metrics-grid">
+        <div class="glass-card">
+          <div class="card-title">System Staleness Score</div>
+          <div class="metric-number" id="stalenessScore">0.00</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">0.0 (Fresh) to 1.0 (Stale)</div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">Average Confidence</div>
+          <div class="metric-number" id="avgConfidence" style="color: var(--accent-cyan);">1.00</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Derived from evidence & decay</div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">Stale Nodes Detected</div>
+          <div class="metric-number" id="staleNodesCount" style="color: var(--accent-amber);">0</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Requires user / QA re-validation</div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-title">Stale / Decayed Knowledge Graph Nodes (§9)</div>
+        <div id="staleNodesList" class="item-list" style="margin-top: 0.75rem;">
+          <div style="color: var(--text-muted); font-size: 0.9rem;">Evaluating confidence decay...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. CONTINUOUS IMPROVEMENTS TAB -->
+    <section id="tab-improvements" class="tab-content">
+      <div class="glass-card" style="margin-bottom: 1.5rem;">
+        <div class="card-title">Post-Deployment Continuous Optimization & Advisory (§32)</div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5;">
+          Automated performance, reliability, security, and database indexing recommendations based on current architecture and incident telemetry.
+        </p>
+      </div>
+      <div id="improvementsList" class="item-list">
+        <div style="color: var(--text-muted); font-size: 0.9rem;">Generating optimization proposals...</div>
+      </div>
+    </section>
+
+    <!-- 14. FAILURE RECOVERY TAB -->
+    <section id="tab-recovery" class="tab-content">
+      <div class="metrics-grid">
+        <div class="glass-card">
+          <div class="card-title">Diagnostic Status</div>
+          <div class="metric-number" id="recoveryHealthStatus" style="font-size: 1.35rem; color: var(--accent-green);">HEALTHY</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Systemic failure mode rating</div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">Active Failures</div>
+          <div class="metric-number" id="activeFailuresCount" style="color: var(--accent-green);">0</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Blocking contradictions or spikes</div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-title">Self-Healing Failure Diagnoses & Remediation Plans (§48)</div>
+        <div id="recoveryDiagnosesList" class="item-list" style="margin-top: 0.75rem;">
+          <div style="color: var(--text-muted); font-size: 0.9rem;">Running system diagnosis...</div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <div id="toast">Copied to clipboard!</div>
@@ -645,6 +710,9 @@
       if (tabId === 'operations') loadRunbook('backup');
       if (tabId === 'testing') loadTestPack('human');
       if (tabId === 'stability') loadStability();
+      if (tabId === 'staleness') loadStaleness();
+      if (tabId === 'improvements') loadImprovements();
+      if (tabId === 'recovery') loadRecovery();
     }
 
     async function loadState() {
@@ -929,6 +997,114 @@
         document.getElementById('blastSummary').innerText = `Total downstream blast count: ${data.total_blast_count} | Risk Level: ${data.risk_level} | Approval: ${data.approval_required}`;
         document.getElementById('blastJson').innerText = JSON.stringify(data, null, 2);
         showToast('Blast radius evaluated!');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadStaleness() {
+      try {
+        const res = await fetch('/api/staleness');
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('stalenessScore').innerText = data.system_staleness_score?.toFixed(2) || '0.00';
+        document.getElementById('avgConfidence').innerText = data.average_confidence?.toFixed(2) || '1.00';
+        document.getElementById('staleNodesCount').innerText = data.stale_node_count || 0;
+
+        const list = document.getElementById('staleNodesList');
+        if (data.stale_nodes && data.stale_nodes.length > 0) {
+          list.innerHTML = data.stale_nodes.map(n => `
+            <div class="item-card" style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 700; color: #fff;">${n.node_id} (${n.node_type}) — ${n.title}</div>
+                <div style="font-size: 0.8rem; color: var(--accent-amber); margin-top: 0.2rem;">
+                  Decayed: ${n.decayed_confidence} (from ${n.original_confidence}) | ${n.staleness_reason}
+                </div>
+              </div>
+              <button class="btn btn-secondary" onclick="revalidateNode('${n.node_id}')">Re-validate</button>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--accent-green); font-size: 0.9rem;">✓ All knowledge graph items are actively validated. Zero stale nodes.</div>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function revalidateNode(nodeId) {
+      try {
+        const res = await fetch('/api/staleness/revalidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_id: nodeId })
+        });
+        const data = await res.json();
+        showToast(`Node ${nodeId} re-validated!`);
+        loadStaleness();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadImprovements() {
+      try {
+        const res = await fetch('/api/improvements');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = document.getElementById('improvementsList');
+        if (data.suggestions && data.suggestions.length > 0) {
+          list.innerHTML = data.suggestions.map(s => `
+            <div class="item-card" style="border-left: 3px solid var(--accent-cyan); margin-bottom: 1rem;">
+              <div class="item-header">
+                <span style="font-weight: 700; color: #fff; font-size: 1rem;">${s.id}: ${s.title}</span>
+                <span class="tag tag-state">ROI: ${s.roi_score}/10</span>
+              </div>
+              <div style="color: #fff; font-size: 0.88rem; margin: 0.4rem 0;">${s.expected_benefit}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                <strong>Category:</strong> ${s.category} | <strong>Risk:</strong> ${s.change_risk} | <strong>Effort:</strong> ${s.estimated_effort}
+              </div>
+              <div style="background: rgba(0,0,0,0.3); padding: 0.6rem; border-radius: 4px;">
+                <strong style="font-size: 0.8rem; color: var(--accent-cyan);">Action Steps:</strong>
+                ${s.action_plan.map(step => `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">• ${step}</div>`).join('')}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--text-muted);">No optimization suggestions at this time.</div>';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadRecovery() {
+      try {
+        const res = await fetch('/api/recovery');
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('recoveryHealthStatus').innerText = data.system_health_status || 'HEALTHY';
+        document.getElementById('activeFailuresCount').innerText = data.failure_count || 0;
+
+        const list = document.getElementById('recoveryDiagnosesList');
+        if (data.diagnoses && data.diagnoses.length > 0) {
+          list.innerHTML = data.diagnoses.map(d => `
+            <div class="item-card" style="border-left: 3px solid ${d.severity === 'CRITICAL' ? 'var(--accent-red)' : 'var(--accent-amber)'};">
+              <div class="item-header">
+                <span style="font-weight: 700; color: #fff;">${d.failure_id} — ${d.title}</span>
+                <span class="tag ${d.severity === 'CRITICAL' ? 'tag-critical' : 'tag-state'}">${d.severity}</span>
+              </div>
+              <div style="font-size: 0.88rem; color: #fff; margin: 0.3rem 0;">${d.impact_summary}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Root Cause: ${d.root_cause_nodes.join(', ')}</div>
+              <div style="margin-top: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px;">
+                <strong style="color: var(--accent-amber); font-size: 0.8rem;">Recovery Steps:</strong>
+                ${d.remediation_steps.map(st => `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">→ ${st}</div>`).join('')}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color: var(--accent-green); font-size: 0.9rem;">✓ Zero systemic failure modes detected. System architecture is aligned.</div>';
+        }
       } catch (err) {
         console.error(err);
       }

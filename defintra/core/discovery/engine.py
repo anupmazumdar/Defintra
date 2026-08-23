@@ -118,6 +118,86 @@ DOMAIN_TEMPLATES: Dict[str, Dict[str, Any]] = {
             ("Public internet indexing (SEO) must be disabled", "Internal tools must remain private", ChangeRisk.LOW),
         ],
     },
+    "ECOMMERCE": {
+        "domain": "ECOMMERCE",
+        "default_components": [
+            {"id": "COMP-STOREFRONT", "name": "Storefront Web & Mobile Catalog", "type": "FRONTEND"},
+            {"id": "COMP-CART-ORDER", "name": "Cart & Order Checkout Service", "type": "BACKEND"},
+            {"id": "COMP-INVENTORY", "name": "Real-Time Inventory Manager", "type": "BACKEND"},
+            {"id": "COMP-PAYMENTS", "name": "Payment Gateway Integration", "type": "PAYMENT"},
+            {"id": "COMP-DB", "name": "Transactional Order & Product DB", "type": "DATABASE"},
+        ],
+        "default_decisions": [
+            {
+                "id": "D-001",
+                "title": "Inventory Concurrency Control",
+                "decision": "Pessimistic Locking / Redis Distributed Lock",
+                "reason": "Prevents double-booking and overselling during high-traffic checkout spikes",
+                "rejected": [{"alternative": "Optimistic Concurrency", "reason_rejected": "High checkout conflict rates during sales"}],
+            }
+        ],
+        "high_impact_questions": [
+            "What payment gateways must be supported? (Stripe, PayPal, Razorpay, Apple Pay)?",
+            "Is this a single-vendor store or a multi-vendor marketplace with vendor payouts?",
+            "What shipping and tax rate calculation providers are needed?",
+        ],
+        "silent_assumptions": [
+            ("Inventory reservation expires after 15 minutes of inactivity in cart", "E-commerce standard pattern", ChangeRisk.LOW),
+            ("PCI-DSS compliance requires zero raw card data storage on local servers", "Mandatory security policy", ChangeRisk.HIGH),
+        ],
+    },
+    "HEALTHCARE": {
+        "domain": "HEALTHCARE",
+        "default_components": [
+            {"id": "COMP-PATIENT-PORTAL", "name": "Patient & Provider Portal", "type": "FRONTEND"},
+            {"id": "COMP-EHR-SERVICE", "name": "FHIR / EHR Clinical Records API", "type": "BACKEND"},
+            {"id": "COMP-APPOINTMENTS", "name": "Appointment Scheduling & Telehealth Engine", "type": "BACKEND"},
+            {"id": "COMP-ENCRYPTED-DB", "name": "Encrypted Patient Database (CMEK)", "type": "DATABASE"},
+        ],
+        "default_decisions": [
+            {
+                "id": "D-001",
+                "title": "HIPAA & Field-Level Encryption",
+                "decision": "AES-256-GCM Envelope Encryption with Audit Logging",
+                "reason": "Strict compliance with medical privacy laws (HIPAA/GDPR)",
+                "rejected": [{"alternative": "Standard unencrypted relational columns", "reason_rejected": "Severe regulatory non-compliance risk"}],
+            }
+        ],
+        "high_impact_questions": [
+            "What regulatory frameworks apply? (HIPAA, HITECH, GDPR Health Data)?",
+            "Does the system interface with existing EHR/EMR systems via HL7 or FHIR standards?",
+            "Are telehealth video consultations integrated directly or through third-party links?",
+        ],
+        "silent_assumptions": [
+            ("Audit logs of PHI access must be immutable and retained for 7 years", "Mandatory HIPAA requirement", ChangeRisk.HIGH),
+        ],
+    },
+    "FINTECH": {
+        "domain": "FINTECH",
+        "default_components": [
+            {"id": "COMP-APP", "name": "Fintech Mobile & Web App", "type": "FRONTEND"},
+            {"id": "COMP-LEDGER", "name": "Double-Entry Accounting Ledger", "type": "BACKEND"},
+            {"id": "COMP-FRAUD-SEC", "name": "Fraud Detection & KYC Engine", "type": "SECURITY"},
+            {"id": "COMP-LEDGER-DB", "name": "Immutable Ledger Database", "type": "DATABASE"},
+        ],
+        "default_decisions": [
+            {
+                "id": "D-001",
+                "title": "Financial Ledger Architecture",
+                "decision": "Immutable Double-Entry Bookkeeping Ledger",
+                "reason": "Guarantees zero mathematical discrepancies in balance calculation",
+                "rejected": [{"alternative": "Single-table mutable balance row", "reason_rejected": "Unacceptable risk of phantom balance corruption"}],
+            }
+        ],
+        "high_impact_questions": [
+            "What financial regulations and KYC/AML tiers must be enforced?",
+            "What fiat/crypto currencies and settlement networks are supported?",
+            "What is the maximum allowable transaction verification latency?",
+        ],
+        "silent_assumptions": [
+            ("Idempotency keys must be required on all payment mutation endpoints", "Prevents duplicate charges", ChangeRisk.HIGH),
+        ],
+    },
 }
 
 
@@ -131,11 +211,17 @@ class DiscoveryEngine:
         lower = text.lower()
         if any(w in lower for w in ["college", "school", "university", "student", "attendance", "faculty", "professor"]):
             return "COLLEGE_STUDENT"
+        elif any(w in lower for w in ["health", "medical", "patient", "doctor", "clinic", "hospital", "ehr", "hipaa"]):
+            return "HEALTHCARE"
+        elif any(w in lower for w in ["bank", "fintech", "payment", "ledger", "crypto", "wallet", "kyc", "fraud"]):
+            return "FINTECH"
+        elif any(w in lower for w in ["shop", "store", "ecommerce", "cart", "checkout", "product", "marketplace"]):
+            return "ECOMMERCE"
         elif any(w in lower for w in ["subscription", "saas", "b2b", "billing", "stripe", "customer"]):
             return "SAAS"
         elif any(w in lower for w in ["internal", "admin tool", "operations", "dashboard", "employee"]):
             return "INTERNAL_TOOL"
-        return "COLLEGE_STUDENT"  # Default to focused niche
+        return "COLLEGE_STUDENT"
 
     def run_fast_path(self, project_name: str, raw_input: str) -> Project:
         """

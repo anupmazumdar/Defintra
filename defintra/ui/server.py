@@ -162,6 +162,33 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 content = tp_gen.generate_human_testing_pack(project.id)
             self._send_json({"type": tp_type, "content": content})
 
+        elif path == "/api/staleness":
+            if not project:
+                self._send_json({"error": "No project"}, 404)
+                return
+            from defintra.core.governance.staleness import StalenessEngine
+            st_engine = StalenessEngine(db)
+            rep = st_engine.evaluate_staleness(project.id)
+            self._send_json(rep.to_dict())
+
+        elif path == "/api/improvements":
+            if not project:
+                self._send_json({"error": "No project"}, 404)
+                return
+            from defintra.core.operations.improvements import PostDeploymentAdvisor
+            advisor = PostDeploymentAdvisor(db)
+            suggestions = advisor.generate_recommendations(project.id)
+            self._send_json({"project_id": project.id, "suggestions": [s.to_dict() for s in suggestions]})
+
+        elif path == "/api/recovery":
+            if not project:
+                self._send_json({"error": "No project"}, 404)
+                return
+            from defintra.core.governance.recovery import FailureRecoveryEngine
+            rec_engine = FailureRecoveryEngine(db)
+            rep = rec_engine.diagnose_project(project.id)
+            self._send_json(rep.to_dict())
+
         else:
             self.send_error(404, "Not Found")
 
@@ -250,6 +277,13 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             sbx_mgr = SandboxManager(db)
             sandbox = sbx_mgr.create_sandbox(project.id, task_id=task_id)
             self._send_json(sandbox.to_dict())
+
+        elif path == "/api/staleness/revalidate":
+            node_id = payload.get("node_id", "")
+            from defintra.core.governance.staleness import StalenessEngine
+            st_engine = StalenessEngine(db)
+            success = st_engine.revalidate_node(project.id, node_id)
+            self._send_json({"status": "OK" if success else "FAILED", "node_id": node_id})
 
         else:
             self.send_error(404, "Not Found")

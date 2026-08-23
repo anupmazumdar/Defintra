@@ -18,6 +18,7 @@ class StabilityReport:
         metrics: Dict[str, Any],
         warnings: List[str],
         recommendations: List[str],
+        high_churn_nodes: Optional[List[str]] = None,
     ):
         self.churn_index = churn_index
         self.stability_score = stability_score
@@ -25,6 +26,7 @@ class StabilityReport:
         self.metrics = metrics
         self.warnings = warnings
         self.recommendations = recommendations
+        self.high_churn_nodes = high_churn_nodes or []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -34,6 +36,7 @@ class StabilityReport:
             "metrics": self.metrics,
             "warnings": self.warnings,
             "recommendations": self.recommendations,
+            "high_churn_nodes": self.high_churn_nodes,
         }
 
 
@@ -90,6 +93,8 @@ class StabilityBudgetEngine:
         if not warnings:
             recommendations.append("Architecture is highly stable. Safe for rapid feature implementation.")
 
+        high_churn = [d.id for d in superseded_decs] + [c.id for c in proposed_comps]
+
         metrics = {
             "total_decisions": total_decisions,
             "approved_decisions": len(approved_decs),
@@ -106,4 +111,5 @@ class StabilityBudgetEngine:
             metrics=metrics,
             warnings=warnings,
             recommendations=recommendations,
+            high_churn_nodes=high_churn,
         )

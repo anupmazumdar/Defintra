@@ -233,8 +233,31 @@ class DefintraMCPServer:
         rep = self.stability_engine.evaluate_stability(project.id)
         return rep.to_dict()
 
-    def diff_specifications(self, dir_a: Dict[str, Any], dir_b: Dict[str, Any]) -> Dict[str, Any]:
-        rep = SpecDiffEngine.diff_dirs(dir_a, dir_b)
+    def check_staleness(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        from defintra.core.governance.staleness import StalenessEngine
+        engine = StalenessEngine(self.db)
+        rep = engine.evaluate_staleness(project.id)
+        return rep.to_dict()
+
+    def get_improvements(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        from defintra.core.operations.improvements import PostDeploymentAdvisor
+        advisor = PostDeploymentAdvisor(self.db)
+        suggestions = advisor.generate_recommendations(project.id)
+        return {"project_id": project.id, "suggestions": [s.to_dict() for s in suggestions]}
+
+    def diagnose_recovery(self, project_id: Optional[str] = None) -> Dict[str, Any]:
+        project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
+        if not project:
+            return {"error": "No project found"}
+        from defintra.core.governance.recovery import FailureRecoveryEngine
+        engine = FailureRecoveryEngine(self.db)
+        rep = engine.diagnose_project(project.id)
         return rep.to_dict()
 
 
@@ -296,6 +319,12 @@ def handle_stdio_rpc():
                 res = server.check_stability_budget(params.get("project_id"))
             elif method == "diff_specifications":
                 res = server.diff_specifications(params.get("dir_a", {}), params.get("dir_b", {}))
+            elif method == "check_staleness":
+                res = server.check_staleness(params.get("project_id"))
+            elif method == "get_improvements":
+                res = server.get_improvements(params.get("project_id"))
+            elif method == "diagnose_recovery":
+                res = server.diagnose_recovery(params.get("project_id"))
             else:
                 res = {"error": f"Unknown method '{method}'"}
 

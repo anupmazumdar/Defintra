@@ -122,3 +122,34 @@ def test_ui_post_actions(running_ui_server):
         data = json.loads(res.read().decode("utf-8"))
         assert "total_blast_count" in data
 
+    # 8. Staleness endpoint
+    with urllib.request.urlopen(f"{running_ui_server}/api/staleness") as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "system_staleness_score" in data
+
+    # 9. Improvements endpoint
+    with urllib.request.urlopen(f"{running_ui_server}/api/improvements") as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert len(data["suggestions"]) >= 2
+
+    # 10. Recovery endpoint
+    with urllib.request.urlopen(f"{running_ui_server}/api/recovery") as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "system_health_status" in data
+
+    # 11. Revalidate node endpoint
+    req_reval = urllib.request.Request(
+        f"{running_ui_server}/api/staleness/revalidate",
+        data=json.dumps({"node_id": "REQ-001"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req_reval) as res:
+        assert res.status == 200
+        data = json.loads(res.read().decode("utf-8"))
+        assert "status" in data
+
+

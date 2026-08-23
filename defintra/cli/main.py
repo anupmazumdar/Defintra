@@ -27,9 +27,12 @@ from defintra.core.diff.engine import SpecDiffEngine
 from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.core.discovery.llm import DeepPathEngine
 from defintra.core.entropy.calculator import EntropyCalculator
+from defintra.core.governance.recovery import FailureRecoveryEngine
 from defintra.core.governance.stability import StabilityBudgetEngine
+from defintra.core.governance.staleness import StalenessEngine
 from defintra.core.graph.engine import ProjectGraph
 from defintra.core.operations.feedback import IncidentTracer
+from defintra.core.operations.improvements import PostDeploymentAdvisor
 from defintra.core.operations.runbooks import RunbookGenerator
 from defintra.core.sandbox.manager import SandboxManager
 from defintra.core.team.coordinator import StructuredEventType, TeamCoordinator
@@ -715,6 +718,137 @@ def export_spec(
     console.print(f"[bold green]Export completed to '{output_dir}':[/bold green]")
     for fname, fpath in written.items():
         console.print(f"  [cyan][OK][/cyan] {fname} -> [dim]{fpath}[/dim]")
+
+
+@app.command()
+def staleness(
+    revalidate_id: Optional[str] = typer.Option(None, "--revalidate", "-r", help="Node ID to re-validate and restore full confidence"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Check confidence decay and detect stale requirements, decisions, and assumptions (§9).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    engine = StalenessEngine(db)
+    if revalidate_id:
+        success = engine.revalidate_node(project.id, revalidate_id)
+        if success:
+            console.print(f"[bold green]Node '{revalidate_id}' successfully re-validated! Confidence restored.[/bold green]")
+        else:
+            console.print(f"[bold red]Node '{revalidate_id}' not found.[/bold red]")
+            raise typer.Exit(1)
+        return
+
+    rep = engine.evaluate_staleness(project.id)
+    color = "green" if rep.system_staleness_score <= 0.20 else ("yellow" if rep.system_staleness_score <= 0.50 else "red")
+
+    console.print(
+        Panel(
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]Total Nodes Checked:[/bold] {rep.total_nodes_checked}\n"
+            f"[bold]Average Confidence:[/bold] {rep.average_confidence:.2f} / 1.0\n"
+            f"[bold]System Staleness Score:[/bold] [{color}]{rep.system_staleness_score:.2f}[/]\n"
+            f"[bold]Stale Nodes Surfaced:[/bold] [{color}]{len(rep.stale_nodes)}[/]",
+            title="Confidence Decay & Staleness Report (§9)",
+            border_style=color,
+        )
+    )
+
+    if rep.stale_nodes:
+        table = Table(title="Stale / Decayed Knowledge Graph Nodes")
+        table.add_column("Node ID", style="cyan", no_wrap=True)
+        table.add_column("Type", style="magenta")
+        table.add_column("Original", style="white")
+        table.add_column("Decayed", style="yellow")
+        table.add_column("Staleness Reason", style="dim")
+        for s in rep.stale_nodes:
+            table.add_row(s.node_id, s.node_type, f"{s.original_confidence:.2f}", f"{s.decayed_confidence:.2f}", s.staleness_reason)
+        console.print(table)
+        console.print("\n[dim]Tip: Run `defintra staleness --revalidate <NODE_ID>` to verify and restore confidence.[/dim]")
+
+
+@app.command()
+def advise(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Generate post-deployment continuous improvement and optimization recommendations (§32).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    advisor = PostDeploymentAdvisor(db)
+    suggestions = advisor.generate_recommendations(project.id)
+
+    console.print(f"[bold cyan]Post-Deployment Continuous Improvement Advisory for '{project.name}' (§32):[/bold cyan]\n")
+
+    for s in suggestions:
+        risk_color = "red" if s.change_risk.value in ["HIGH", "CRITICAL"] else ("yellow" if s.change_risk.value == "MEDIUM" else "green")
+        steps_text = "\n".join([f"  [cyan]{i+1}.[/cyan] {step}" for i, step in enumerate(s.action_plan)])
+        console.print(
+            Panel(
+                f"[bold white]{s.title}[/bold white]  [dim](Category: {s.category} | ROI Score: {s.roi_score}/10)[/dim]\n\n"
+                f"[bold]Expected Benefit:[/bold] {s.expected_benefit}\n"
+                f"[bold]Change Risk:[/bold] [{risk_color}]{s.change_risk.value}[/] | [bold]Estimated Effort:[/bold] {s.estimated_effort}\n\n"
+                f"[bold]Action Plan:[/bold]\n{steps_text}",
+                title=f"[{s.id}] {s.category}",
+                border_style="cyan",
+            )
+        )
+
+
+@app.command()
+def recover(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Diagnose systemic failure modes and generate self-healing recovery actions (§48).
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    recovery_engine = FailureRecoveryEngine(db)
+    report = recovery_engine.diagnose_project(project.id)
+
+    color = "green" if report.system_health_status == "HEALTHY" else ("yellow" if report.system_health_status == "DEGRADED" else "red")
+    console.print(
+        Panel(
+            f"[bold]Project:[/bold] {project.name}\n"
+            f"[bold]System Diagnostic Status:[/bold] [{color}]{report.system_health_status}[/]\n"
+            f"[bold]Active Failure Modes Detected:[/bold] [{color}]{len(report.diagnoses)}[/]",
+            title="System Failure Diagnosis & Recovery Engine (§48)",
+            border_style=color,
+        )
+    )
+
+    if not report.diagnoses:
+        console.print("[bold green]Zero systemic failure modes detected. Project architecture is fully aligned![/bold green]")
+        return
+
+    for d in report.diagnoses:
+        steps = "\n".join([f"  [yellow]→[/yellow] {step}" for step in d.remediation_steps])
+        console.print(
+            Panel(
+                f"[bold red]{d.title}[/bold red]  [dim]({d.failure_type} | Severity: {d.severity})[/dim]\n\n"
+                f"[bold]Impact:[/bold] {d.impact_summary}\n"
+                f"[bold]Root Cause Nodes:[/bold] {', '.join(d.root_cause_nodes)}\n\n"
+                f"[bold]Structured Recovery Plan:[/bold]\n{steps}\n"
+                + (f"\n[bold green]Auto-Fix Command:[/bold green] `{d.auto_fix_command}`" if d.auto_fix_command else ""),
+                title=f"[{d.failure_id}] {d.severity}",
+                border_style="red" if d.severity == "CRITICAL" else "yellow",
+            )
+        )
 
 
 @app.command(name="ui")
