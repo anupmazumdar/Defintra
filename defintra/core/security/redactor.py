@@ -5,7 +5,7 @@ and prompt injection delimiters before persistence into the Defintra Knowledge G
 """
 
 import re
-from typing import Dict, List, Optional, Pattern, Tuple
+from typing import Dict, List, Optional, Pattern
 
 
 class SecretPattern:

@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
-from defintra.core.security.redactor import SecretRedactor
 from defintra.core.brownfield.scanner import BrownfieldScanner
 from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
@@ -28,6 +27,7 @@ from defintra.core.models.entities import (
 )
 from defintra.core.operations.feedback import IncidentTracer
 from defintra.core.operations.runbooks import RunbookGenerator
+from defintra.core.security.redactor import SecretRedactor
 from defintra.core.team.coordinator import TeamCoordinator
 from defintra.core.testing.test_packs import TestPackGenerator
 

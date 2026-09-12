@@ -1,11 +1,7 @@
-import pytest
 
 from defintra.core.db.database import Database
 from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.core.models.entities import (
-    ArtifactState,
-    ChangeRisk,
-    Decision,
     EARSPattern,
     Requirement,
     RequirementPriority,

@@ -1,4 +1,3 @@
-import pytest
 from typer.testing import CliRunner
 
 from defintra.cli.main import app
@@ -51,7 +50,7 @@ def test_cli_purge_command(tmp_path, monkeypatch):
     assert db.get_project(p.id) is None
 
     # Recreate and test purge all
-    p2 = engine.run_fast_path("Purge All Target", "Build web client")
+    engine.run_fast_path("Purge All Target", "Build web client")
     res_all = runner.invoke(app, ["purge", "--all", "--force"])
     assert res_all.exit_code == 0
     assert "Successfully purged all projects" in res_all.stdout
