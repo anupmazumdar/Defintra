@@ -270,10 +270,22 @@ def test_cli_governance_and_new_commands(monkeypatch):
         assert res_team_blocked.exit_code == 1
         assert "EXECUTION REFUSED BY POLICY ENGINE" in res_team_blocked.output
 
-        # Test Sandbox execution & policy block
-        res_sbx_exec_allow = runner.invoke(app, ["sandbox", "exec", "read_repository"])
-        assert res_sbx_exec_allow.exit_code == 0
-        assert "Sandbox Action Executed" in res_sbx_exec_allow.output
+        # Test Sandbox policy evaluation and real execution
+        res_sbx_eval = runner.invoke(app, ["sandbox", "exec", "read_repository"])
+        assert res_sbx_eval.exit_code == 0
+        assert "Sandbox Policy Evaluation" in res_sbx_eval.output
+        assert "POLICY_APPROVED" in res_sbx_eval.output
+
+        # Test Sandbox real command execution
+        res_sbx_exec = runner.invoke(app, ["sandbox", "exec", "read_repository", "-c", "python -c \"print('SBX_OK')\""])
+        assert res_sbx_exec.exit_code == 0
+        assert "Sandbox Action Executed" in res_sbx_exec.output
+        assert "SBX_OK" in res_sbx_exec.output
+
+        # Test Sandbox authorize command
+        res_sbx_auth = runner.invoke(app, ["sandbox", "authorize", "read_repository"])
+        assert res_sbx_auth.exit_code == 0
+        assert "Policy Evaluation: APPROVED" in res_sbx_auth.output
 
         res_sbx_exec_deny = runner.invoke(app, ["sandbox", "exec", "delete_production_data"])
         assert res_sbx_exec_deny.exit_code == 1

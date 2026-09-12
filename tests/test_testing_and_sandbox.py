@@ -73,7 +73,7 @@ def test_sandbox_worktree_isolation_and_confinement(test_db, tmp_path):
     assert escaped_action["status"] == "BLOCKED"
     assert "Path escape violation" in escaped_action["reason"]
 
-    # 3. Allow action inside worktree path
+    # 3. Allow action inside worktree path (policy check)
     inside_path = Path(sbx.worktree_path) / "app.py"
     allowed_action = mgr.execute_sandbox_action(
         sbx,
@@ -81,7 +81,21 @@ def test_sandbox_worktree_isolation_and_confinement(test_db, tmp_path):
         context={"path": str(inside_path)},
     )
     assert allowed_action["allowed"] is True
-    assert allowed_action["status"] == "EXECUTED"
+    assert allowed_action["status"] == "POLICY_APPROVED"
+    assert allowed_action["executed"] is False
+
+    # 3b. Real file modification inside sandbox worktree
+    mod_action = mgr.execute_sandbox_action(
+        sbx,
+        action_type="modify_file",
+        approved_by="Engineer",
+        context={"file": "app.py", "content": "print('hello world')\n"},
+    )
+    assert mod_action["allowed"] is True
+    assert mod_action["status"] == "EXECUTED"
+    assert mod_action["executed"] is True
+    assert inside_path.exists()
+    assert inside_path.read_text(encoding="utf-8") == "print('hello world')\n"
 
     # 4. Clean up sandbox
     cleaned = mgr.cleanup_sandbox(sbx)

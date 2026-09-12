@@ -73,6 +73,8 @@ def test_ui_get_html_and_state(running_ui_server):
         # Verify Content-Security-Policy header is present
         assert "Content-Security-Policy" in res.headers
         assert "default-src 'self'" in res.headers["Content-Security-Policy"]
+        # Verify Referrer-Policy: no-referrer is present
+        assert res.headers.get("Referrer-Policy") == "no-referrer"
 
     # 2. State API
     with api_request(running_ui_server, "/api/state") as res:
@@ -283,3 +285,59 @@ def test_ui_stored_xss_escaped(running_ui_server):
     assert "<" not in escaped
     assert ">" not in escaped
     assert "&lt;img" in escaped
+
+
+def test_ui_token_rotation_and_revocation(running_ui_server):
+    # 1. Rotate token using current valid token
+    with api_request(running_ui_server, "/api/token/rotate", data={}, method="POST") as res:
+        assert res.status == 200
+        rotate_data = json.loads(res.read().decode("utf-8"))
+        assert rotate_data["status"] == "rotated"
+        new_token = rotate_data["new_token"]
+        assert new_token != TEST_TOKEN
+        # New session cookie is set
+        assert "Set-Cookie" in res.headers
+        assert "defintra_session=" in res.headers["Set-Cookie"]
+
+    # 2. Old token must now be rejected
+    with pytest.raises(urllib.error.HTTPError) as exc_old:
+        api_request(running_ui_server, "/api/state", token=TEST_TOKEN)
+    assert exc_old.value.code == 401
+
+    # 3. New token must work
+    with api_request(running_ui_server, "/api/state", token=new_token) as res:
+        assert res.status == 200
+
+    # 4. Explicitly revoke the new token
+    with api_request(running_ui_server, "/api/token/revoke", data={}, token=new_token, method="POST") as res:
+        assert res.status == 200
+        revoke_data = json.loads(res.read().decode("utf-8"))
+        assert revoke_data["status"] == "revoked"
+
+    # 5. Revoked token is now rejected
+    with pytest.raises(urllib.error.HTTPError) as exc_revoked:
+        api_request(running_ui_server, "/api/state", token=new_token)
+    assert exc_revoked.value.code == 401
+
+
+def test_ui_session_inactivity_expiry(running_ui_server):
+    # 1. Establish cookie session
+    with api_request(running_ui_server, "/api/session", data={"token": TEST_TOKEN}, method="POST", token=None) as res:
+        assert res.status == 200
+        cookie_header = res.headers.get("Set-Cookie")
+        assert "defintra_session=" in cookie_header
+        session_id = cookie_header.split(";")[0].split("=")[1]
+
+    # Verify session works
+    with api_request(running_ui_server, "/api/state", token=None, extra_headers={"Cookie": f"defintra_session={session_id}"}) as res:
+        assert res.status == 200
+
+    # 2. Simulate inactivity expiration (simulate last active was 10 hours ago)
+    DefintraAPIHandler.active_sessions[session_id] = 1.0  # long in the past
+
+    # Request with expired session cookie must be rejected
+    with pytest.raises(urllib.error.HTTPError) as exc_expired:
+        api_request(running_ui_server, "/api/state", token=None, extra_headers={"Cookie": f"defintra_session={session_id}"})
+    assert exc_expired.value.code == 401
+    assert session_id not in DefintraAPIHandler.active_sessions
+

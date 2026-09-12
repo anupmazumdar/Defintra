@@ -1314,12 +1314,18 @@ def sandbox_create(
 @sandbox_app.command(name="exec")
 def sandbox_exec(
     action: str = typer.Argument(..., help="Action to execute inside sandbox (e.g. read_repository, modify_file, execute_shell, deploy)"),
+    command: Optional[str] = typer.Option(None, "--command", "-c", help="Shell command to execute inside sandbox worktree (for execute_shell)"),
+    file: Optional[str] = typer.Option(None, "--file", "-f", help="Target file path inside sandbox worktree (for modify_file)"),
+    content: Optional[str] = typer.Option(None, "--content", help="File content to write inside sandbox worktree (for modify_file)"),
+    timeout: int = typer.Option(30, "--timeout", help="Subprocess execution timeout in seconds"),
     task: str = typer.Option("task_execution", "--task", "-t", help="Task ID"),
     approved_by: Optional[str] = typer.Option(None, "--approved-by", help="Authorization name if action requires governance approval (§45)"),
     project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
 ):
     """
-    Execute a governed action inside an isolated staging sandbox with Policy Engine enforcement (§25, §45).
+    Execute a bounded, governed action inside an isolated staging sandbox (§25, §45).
+    Runs bounded shell commands or modifies files strictly confined to the sandbox worktree.
+    When invoked without execution payloads, evaluates policy authorization only.
     """
     db = get_db()
     project = db.get_project(project_id) if project_id else db.get_first_project()
@@ -1330,7 +1336,23 @@ def sandbox_exec(
     from defintra.core.sandbox.manager import SandboxManager
     sbx = SandboxManager(db)
     sandbox = sbx.create_sandbox(project.id, task_id=task)
-    res = sbx.execute_sandbox_action(sandbox, action_type=action, approved_by=approved_by)
+
+    context = {}
+    if command:
+        context["command"] = command
+    if file:
+        context["file"] = file
+    if content:
+        context["content"] = content
+    if timeout:
+        context["timeout"] = timeout
+
+    res = sbx.execute_sandbox_action(
+        sandbox,
+        action_type=action,
+        approved_by=approved_by,
+        context=context or None,
+    )
 
     if not res["allowed"]:
         console.print(
@@ -1345,13 +1367,90 @@ def sandbox_exec(
         )
         raise typer.Exit(1)
 
+    if res.get("status") == "EXECUTED":
+        details = [
+            f"[bold]Sandbox ID:[/bold] {sandbox.sandbox_id}",
+            f"[bold]Action:[/bold] {action}",
+            "[bold]Execution Status:[/bold] [bold green]EXECUTED[/bold green]",
+            f"[bold]Rationale:[/bold] {res['reason']}",
+        ]
+        if "stdout" in res and res["stdout"]:
+            details.append(f"\n[bold]Output (stdout):[/bold]\n{res['stdout']}")
+        if "stderr" in res and res["stderr"]:
+            details.append(f"\n[bold yellow]Stderr:[/bold yellow]\n{res['stderr']}")
+        if "file_modified" in res:
+            details.append(f"\n[bold]Modified File:[/bold] {res['file_modified']} ({res.get('bytes_written', 0)} bytes written)")
+
+        console.print(
+            Panel(
+                "\n".join(details),
+                title="Sandbox Action Executed (§25, §45)",
+                border_style="green",
+            )
+        )
+    else:
+        status_color = "green" if res.get("status") == "POLICY_APPROVED" else "yellow"
+        console.print(
+            Panel(
+                f"[bold]Sandbox ID:[/bold] {sandbox.sandbox_id}\n"
+                f"[bold]Action:[/bold] {action}\n"
+                f"[bold]Policy Status:[/bold] [{status_color}]{res['status']}[/{status_color}] (Evaluation only — no execution performed)\n"
+                f"[bold]Decision:[/bold] {res['decision']} (Risk: {res['risk_level']})\n"
+                f"[bold]Rationale:[/bold] {res['reason']}",
+                title="Sandbox Policy Evaluation (§25, §45)",
+                border_style="blue",
+            )
+        )
+
+
+@sandbox_app.command(name="authorize")
+def sandbox_authorize(
+    action: str = typer.Argument(..., help="Action to evaluate against Policy Engine (e.g. read_repository, modify_file, execute_shell, deploy)"),
+    file: Optional[str] = typer.Option(None, "--file", "-f", help="Target file path to verify filesystem confinement"),
+    approved_by: Optional[str] = typer.Option(None, "--approved-by", help="Authorization name if action requires approval (§45)"),
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
+):
+    """
+    Evaluate policy boundaries without performing any execution (§25, §45).
+    Evaluates whether an action is allowed or denied under the governance policy.
+    NOTE: This command evaluates policy only and performs no execution.
+    """
+    db = get_db()
+    project = db.get_project(project_id) if project_id else db.get_first_project()
+    if not project:
+        console.print("[red]No active project found.[/red]")
+        raise typer.Exit(1)
+
+    from defintra.core.sandbox.manager import SandboxManager
+    sbx = SandboxManager(db)
+    sandbox = sbx.create_sandbox(project.id, task_id="policy_authorization")
+    context = {"file": file} if file else None
+    res = sbx.execute_sandbox_action(sandbox, action_type=action, approved_by=approved_by, context=context)
+
+    if not res["allowed"]:
+        console.print(
+            Panel(
+                f"[bold red]SANDBOX ACTION DISALLOWED BY POLICY[/bold red]\n\n"
+                f"[bold]Action:[/bold] {action}\n"
+                f"[bold]Status:[/bold] [bold red]{res['status']}[/bold red]\n"
+                f"[bold]Decision:[/bold] [bold red]{res['decision']}[/bold red] (Risk: {res['risk_level']})\n"
+                f"[bold]Rationale:[/bold] {res['reason']}\n\n"
+                f"[dim]Note: defintra sandbox authorize evaluates policy only; no action was executed.[/dim]",
+                title="Policy Evaluation: DENIED (§45)",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(1)
+
     console.print(
         Panel(
             f"[bold]Sandbox ID:[/bold] {sandbox.sandbox_id}\n"
             f"[bold]Action:[/bold] {action}\n"
-            f"[bold]Execution Status:[/bold] [bold green]{res['status']}[/bold green]\n"
-            f"[bold]Rationale:[/bold] {res['reason']}",
-            title="Sandbox Action Executed (§25, §45)",
+            f"[bold]Status:[/bold] [bold green]{res['status']}[/bold green]\n"
+            f"[bold]Decision:[/bold] [bold green]{res['decision']}[/bold green] (Risk: {res['risk_level']})\n"
+            f"[bold]Rationale:[/bold] {res['reason']}\n\n"
+            f"[dim]Note: defintra sandbox authorize evaluates policy only; no action was executed.[/dim]",
+            title="Policy Evaluation: APPROVED (§45)",
             border_style="green",
         )
     )
@@ -1467,10 +1566,30 @@ def launch_ui(
     port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically"),
     token: Optional[str] = typer.Option(None, "--token", help="Optional session token for authentication"),
+    revoke: bool = typer.Option(False, "--revoke", help="Revoke active session token on running dashboard server"),
 ):
     """
     Launch the interactive Defintra Control Center & Web Dashboard in your browser (§5, §7, §21).
     """
+    if revoke:
+        import urllib.request
+        if not token:
+            console.print("[red]Error: You must supply the token to revoke using --token <token>[/red]")
+            raise typer.Exit(1)
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/token/revoke",
+            headers={"Authorization": f"Bearer {token}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    console.print(f"[bold green]Session token successfully revoked on port {port}.[/bold green]")
+                    raise typer.Exit(0)
+        except Exception as e:
+            console.print(f"[bold red]Failed to revoke token on port {port}: {e}[/bold red]")
+            raise typer.Exit(1)
+
     import secrets
     auth_token = token or secrets.token_urlsafe(24)
     auth_url = f"http://127.0.0.1:{port}/?token={auth_token}"
@@ -1492,11 +1611,12 @@ def launch_dashboard(
     port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically"),
     token: Optional[str] = typer.Option(None, "--token", help="Optional session token for authentication"),
+    revoke: bool = typer.Option(False, "--revoke", help="Revoke active session token on running dashboard server"),
 ):
     """
     Alias for `defintra ui`.
     """
-    launch_ui(port=port, no_browser=no_browser, token=token)
+    launch_ui(port=port, no_browser=no_browser, token=token, revoke=revoke)
 
 
 @app.command(name="mcp")

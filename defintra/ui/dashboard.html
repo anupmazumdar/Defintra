@@ -789,17 +789,24 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const bootstrapToken = urlParams.get('token');
-    let sessionToken = bootstrapToken || sessionStorage.getItem('defintra_token') || '';
+    if (bootstrapToken) {
+      sessionStorage.setItem('defintra_token', bootstrapToken);
+      try {
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch (e) {
+        console.error('Failed to scrub token from address bar:', e);
+      }
+    }
+    let sessionToken = sessionStorage.getItem('defintra_token') || '';
 
     if (bootstrapToken) {
-      // Exchange bootstrap token for HttpOnly session cookie and clear URL history
+      // Exchange bootstrap token for HttpOnly session cookie and clear sessionStorage
       fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: bootstrapToken })
       }).then(res => {
         if (res.ok) {
-          window.history.replaceState({}, document.title, window.location.pathname);
           sessionStorage.removeItem('defintra_token');
           sessionToken = '';
         }

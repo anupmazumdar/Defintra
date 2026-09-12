@@ -101,24 +101,28 @@ def test_sandbox_evaluates_and_enforces_policy(policy_db):
     assert "read_repository" in sandbox.allowed_actions
     assert "delete_production_data" in sandbox.denied_actions
 
-    # Execute allowed action
+    # Execute allowed action without command payload (policy evaluation only)
     res1 = sbx.execute_sandbox_action(sandbox, "read_repository")
     assert res1["allowed"] is True
-    assert res1["status"] == "EXECUTED"
+    assert res1["status"] == "POLICY_APPROVED"
+    assert res1["executed"] is False
 
     # Execute denied action
     res2 = sbx.execute_sandbox_action(sandbox, "delete_production_data")
     assert res2["allowed"] is False
     assert res2["status"] == "BLOCKED"
+    assert res2["executed"] is False
 
     # Execute approval-required action without vs with approval
     res3 = sbx.execute_sandbox_action(sandbox, "deploy")
     assert res3["allowed"] is False
-    assert res3["status"] == "BLOCKED"
+    assert res3["status"] in ("BLOCKED", "POLICY_DENIED")
+    assert res3["executed"] is False
 
     res4 = sbx.execute_sandbox_action(sandbox, "deploy", approved_by="SecurityLead")
     assert res4["allowed"] is True
-    assert res4["status"] == "EXECUTED"
+    assert res4["status"] == "POLICY_APPROVED"
+    assert res4["executed"] is False
 
     gate_result = sbx.validate_governance_gate("proj_gov", sandbox)
     assert gate_result["checks"]["policy_governance_satisfied"] is True

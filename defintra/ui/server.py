@@ -6,6 +6,7 @@ Serves the rich dark-mode Defintra Control Center and provides JSON REST API.
 
 import json
 import secrets
+import time
 import urllib.parse
 import webbrowser
 from http.cookies import SimpleCookie
@@ -20,7 +21,6 @@ from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.governance.stability import StabilityBudgetEngine
 from defintra.core.graph.engine import ProjectGraph
-from defintra.core.models.entities import current_utc_time
 from defintra.core.operations.feedback import IncidentTracer
 from defintra.core.operations.runbooks import RunbookGenerator
 from defintra.core.security.redactor import SecretRedactor
@@ -30,13 +30,21 @@ from defintra.core.team.coordinator import TeamCoordinator
 class DefintraAPIHandler(BaseHTTPRequestHandler):
     db_path: str = ".defintra/project.db"
     auth_token: Optional[str] = None
-    active_sessions: Dict[str, str] = {}
+    token_created_at: float = 0.0
+    token_ttl_seconds: float = 8 * 3600  # Master token expires after 8 hours
+    active_sessions: Dict[str, float] = {}  # session_id -> last_activity_timestamp
+    session_inactivity_ttl: float = 8 * 3600  # Inactivity timeout (8 hours)
 
     def _get_db(self) -> Database:
         return Database(self.db_path)
 
     def _check_auth(self) -> bool:
         if self.auth_token is None:
+            return False
+
+        now = time.time()
+        # Master token lifetime expiration check
+        if self.token_created_at > 0 and (now - self.token_created_at > self.token_ttl_seconds):
             return False
 
         # 1. Check Session Cookie: defintra_session=<session_id>
@@ -48,6 +56,12 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 if "defintra_session" in cookies:
                     session_id = cookies["defintra_session"].value
                     if session_id in self.active_sessions:
+                        last_active = self.active_sessions[session_id]
+                        if (now - last_active) > self.session_inactivity_ttl:
+                            self.active_sessions.pop(session_id, None)
+                            return False
+                        # Update rolling activity timestamp
+                        self.active_sessions[session_id] = now
                         return True
             except Exception:
                 pass
@@ -91,6 +105,7 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';",
         )
+        self.send_header("Referrer-Policy", "no-referrer")
         if set_cookie:
             self.send_header("Set-Cookie", set_cookie)
         self.end_headers()
@@ -153,7 +168,7 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             q_token = query.get("token", [""])[0]
             if q_token and self.auth_token and secrets.compare_digest(q_token, self.auth_token):
                 session_id = secrets.token_urlsafe(32)
-                self.active_sessions[session_id] = current_utc_time()
+                self.active_sessions[session_id] = time.time()
                 cookie_hdr = f"defintra_session={session_id}; HttpOnly; SameSite=Strict; Path=/"
 
             html_file = Path(__file__).parent / "dashboard.html"
@@ -324,9 +339,15 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         # 1. Dedicated session exchange endpoint for bootstrap token
         if path == "/api/session":
             req_token = payload.get("token", "")
-            if self.auth_token and req_token and secrets.compare_digest(req_token, self.auth_token):
+            now = time.time()
+            if (
+                self.auth_token
+                and req_token
+                and secrets.compare_digest(req_token, self.auth_token)
+                and (self.token_created_at == 0 or now - self.token_created_at <= self.token_ttl_seconds)
+            ):
                 session_id = secrets.token_urlsafe(32)
-                self.active_sessions[session_id] = current_utc_time()
+                self.active_sessions[session_id] = now
                 body = json.dumps({"status": "authenticated", "session_id": session_id}).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -339,8 +360,54 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             else:
-                self._send_json({"error": "Unauthorized: Invalid bootstrap token"}, 401)
+                self._send_json({"error": "Unauthorized: Invalid or expired bootstrap token"}, 401)
                 return
+
+        elif path == "/api/token/rotate":
+            if not self._check_auth():
+                self._send_json({"error": "Unauthorized: Valid session or token required"}, 401)
+                return
+            new_token = secrets.token_urlsafe(24)
+            DefintraAPIHandler.auth_token = new_token
+            DefintraAPIHandler.token_created_at = time.time()
+            DefintraAPIHandler.active_sessions.clear()
+
+            new_session_id = secrets.token_urlsafe(32)
+            DefintraAPIHandler.active_sessions[new_session_id] = time.time()
+
+            body = json.dumps({
+                "status": "rotated",
+                "new_token": new_token,
+                "session_id": new_session_id,
+            }).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header(
+                "Set-Cookie",
+                f"defintra_session={new_session_id}; HttpOnly; SameSite=Strict; Path=/",
+            )
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        elif path == "/api/token/revoke":
+            if not self._check_auth():
+                self._send_json({"error": "Unauthorized: Valid session or token required"}, 401)
+                return
+            DefintraAPIHandler.auth_token = None
+            DefintraAPIHandler.active_sessions.clear()
+            body = json.dumps({"status": "revoked"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header(
+                "Set-Cookie",
+                "defintra_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+            )
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         if not self._check_auth():
             self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
@@ -465,6 +532,7 @@ def start_ui_server(
     token = auth_token or secrets.token_urlsafe(24)
     DefintraAPIHandler.db_path = db_path
     DefintraAPIHandler.auth_token = token
+    DefintraAPIHandler.token_created_at = time.time()
     server = ThreadingHTTPServer(("127.0.0.1", port), DefintraAPIHandler)
     url = f"http://127.0.0.1:{port}/?token={token}"
     print(f"Defintra Control Center running at: {url}")

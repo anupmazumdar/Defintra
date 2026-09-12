@@ -4,10 +4,11 @@ Scans an existing codebase to extract architecture components, contracts,
 data models, API endpoints, and dependencies into the Defintra Knowledge Graph.
 """
 
+import ast
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from defintra.core.db.database import Database
 from defintra.core.models.entities import (
@@ -59,6 +60,92 @@ class ScanReport:
 class BrownfieldScanner:
     def __init__(self, db: Database):
         self.db = db
+
+    @staticmethod
+    def _parse_python_ast(content: str) -> Tuple[List[str], List[str]]:
+        """
+        Parses Python source code using Python's standard library `ast` module (§38).
+        Extracts:
+        - FastAPI / Flask / Django route decorators from sync and async function definitions.
+        - Database model classes (SQLAlchemy declarative models, Django models, __tablename__).
+        """
+        endpoints: List[str] = []
+        models: List[str] = []
+
+        try:
+            tree = ast.parse(content)
+        except (SyntaxError, ValueError):
+            return [], []
+
+        for node in ast.walk(tree):
+            # 1. API Route Extraction from decorated functions
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for dec in node.decorator_list:
+                    if isinstance(dec, ast.Call):
+                        func_node = dec.func
+                        route_path: Optional[str] = None
+                        http_methods: List[str] = []
+
+                        # Pattern @app.get('/...') or @router.post('/...')
+                        if isinstance(func_node, ast.Attribute):
+                            method_name = func_node.attr.lower()
+                            if method_name in ("get", "post", "put", "delete", "patch", "options", "head"):
+                                http_methods.append(method_name.upper())
+                            elif method_name in ("route", "api_route"):
+                                for kw in dec.keywords:
+                                    if kw.arg == "methods":
+                                        if isinstance(kw.value, (ast.List, ast.Tuple, ast.Set)):
+                                            for elt in kw.value.elts:
+                                                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                                                    http_methods.append(elt.value.upper())
+                                if not http_methods:
+                                    http_methods.append("GET")
+
+                        # Pattern @get('/...')
+                        elif isinstance(func_node, ast.Name):
+                            method_name = func_node.id.lower()
+                            if method_name in ("get", "post", "put", "delete", "patch", "options", "head"):
+                                http_methods.append(method_name.upper())
+
+                        # Extract route path argument
+                        if dec.args and isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
+                            route_path = dec.args[0].value
+                        else:
+                            for kw in dec.keywords:
+                                if kw.arg in ("path", "rule") and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                                    route_path = kw.value.value
+
+                        if route_path and http_methods:
+                            for m in http_methods:
+                                endpoints.append(f"{m} {route_path}")
+
+            # 2. Database model class extraction (SQLAlchemy / Django / Peewee)
+            elif isinstance(node, ast.ClassDef):
+                is_model = False
+                for base in node.bases:
+                    if isinstance(base, ast.Name):
+                        if any(term in base.id for term in ("Base", "Model", "Document", "Entity")):
+                            is_model = True
+                            break
+                    elif isinstance(base, ast.Attribute):
+                        if any(term in base.attr for term in ("Model", "Base", "Document")):
+                            is_model = True
+                            break
+                    elif isinstance(base, ast.Call):
+                        is_model = True
+                        break
+
+                if is_model:
+                    table_name = None
+                    for item in node.body:
+                        if isinstance(item, ast.Assign):
+                            for target in item.targets:
+                                if isinstance(target, ast.Name) and target.id == "__tablename__":
+                                    if isinstance(item.value, ast.Constant) and isinstance(item.value.value, str):
+                                        table_name = item.value.value
+                    models.append(table_name or node.name)
+
+        return endpoints, models
 
     def scan_repository(
         self,
@@ -191,25 +278,39 @@ class BrownfieldScanner:
         sql_tables: List[str] = []
 
         for f_path in all_file_paths:
-            if f_path.suffix in [".py", ".ts", ".js"]:
+            if f_path.suffix == ".py":
                 try:
                     content = f_path.read_text(encoding="utf-8", errors="ignore")
-                    # Python FastAPI / Flask route matches
-                    routes = re.findall(r"@(?:app|router)\.(get|post|put|delete|patch)\([\"']([^\"']+)[\"']", content)
-                    for method, route in routes:
-                        api_endpoints.append(f"{method.upper()} {route}")
+                    # Real Python AST parsing
+                    ast_endpoints, ast_models = self._parse_python_ast(content)
+                    if ast_endpoints:
+                        api_endpoints.extend(ast_endpoints)
+                    if ast_models:
+                        sql_tables.extend(ast_models)
 
-                    # Express / JS route matches
+                    # Regex fallback if AST parsing detected no routes
+                    if not ast_endpoints:
+                        routes = re.findall(r"@(?:app|router)\.(get|post|put|delete|patch)\([\"']([^\"']+)[\"']", content)
+                        for method, route in routes:
+                            api_endpoints.append(f"{method.upper()} {route}")
+
+                    # Regex fallback if AST parsing detected no models
+                    if not ast_models:
+                        tables = re.findall(r"class\s+([A-Za-z0-9_]+)\(.*(?:Base|Model).*\):", content)
+                        for t in tables:
+                            sql_tables.append(t)
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+            elif f_path.suffix in [".ts", ".js"]:
+                try:
+                    content = f_path.read_text(encoding="utf-8", errors="ignore")
+                    # Express / JS route pattern matches
                     express_routes = re.findall(r"(?:app|router)\.(get|post|put|delete|patch)\([\"']([^\"']+)[\"']", content)
                     for method, route in express_routes:
                         api_endpoints.append(f"{method.upper()} {route}")
-
-                    # SQL / SQLAlchemy table matches
-                    tables = re.findall(r"class\s+([A-Za-z0-9_]+)\(.*(?:Base|Model).*\):", content)
-                    for t in tables:
-                        sql_tables.append(t)
                 except (OSError, UnicodeDecodeError):
-                    pass  # Ignore unreadable or non-UTF8 source files
+                    pass
 
             elif f_path.suffix == ".sql":
                 try:
@@ -217,7 +318,7 @@ class BrownfieldScanner:
                     create_tables = re.findall(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_]+)", content, re.IGNORECASE)
                     sql_tables.extend(create_tables)
                 except (OSError, UnicodeDecodeError):
-                    pass  # Ignore unreadable SQL files
+                    pass
 
         # Create API Contract if endpoints found
         if api_endpoints:

@@ -138,3 +138,95 @@ def test_sandbox_path_escape_blocks_execution(tmp_path):
     assert res["status"] == "BLOCKED"
     assert "Path escape violation" in res["reason"]
     assert "command" not in res  # Command was never executed
+
+
+def test_sandbox_modify_file_bounded_execution(tmp_path):
+    db_file = tmp_path / "project.db"
+    db = Database(str(db_file))
+    engine = DiscoveryEngine(db)
+    project = engine.run_fast_path("Modify File Test", "Test real file creation in sandbox.")
+
+    sbx_base = tmp_path / "sandboxes"
+    mgr = SandboxManager(db, base_dir=str(sbx_base))
+    sbx = mgr.create_sandbox(project.id, task_id="modify_task", isolation_type="directory")
+
+    # 1. Modify file with relative path inside sandbox
+    res = mgr.execute_sandbox_action(
+        sbx,
+        action_type="modify_file",
+        approved_by="DevLead",
+        context={"file": "src/utils/math.py", "content": "def add(a, b):\n    return a + b\n"},
+    )
+    assert res["allowed"] is True
+    assert res["status"] == "EXECUTED"
+    assert res["executed"] is True
+    assert str(Path("src/utils/math.py")) in res["file_modified"]
+
+    created_file = Path(sbx.worktree_path) / "src" / "utils" / "math.py"
+    assert created_file.exists()
+    assert created_file.read_text(encoding="utf-8") == "def add(a, b):\n    return a + b\n"
+
+
+def test_sandbox_modify_file_path_escape_blocked(tmp_path):
+    db_file = tmp_path / "project.db"
+    db = Database(str(db_file))
+    engine = DiscoveryEngine(db)
+    project = engine.run_fast_path("Escape Test", "Test escaping write blocked.")
+
+    sbx_base = tmp_path / "sandboxes"
+    mgr = SandboxManager(db, base_dir=str(sbx_base))
+    sbx = mgr.create_sandbox(project.id, task_id="escape_write_task", isolation_type="directory")
+
+    # Attempt to write outside sandbox
+    outside_target = tmp_path / "system_override.txt"
+    res = mgr.execute_sandbox_action(
+        sbx,
+        action_type="modify_file",
+        approved_by="DevLead",
+        context={"file": str(outside_target), "content": "malicious payload"},
+    )
+    assert res["allowed"] is False
+    assert res["status"] == "BLOCKED"
+    assert res["executed"] is False
+    assert not outside_target.exists()
+
+
+def test_sandbox_pure_policy_does_not_claim_executed(tmp_path):
+    db_file = tmp_path / "project.db"
+    db = Database(str(db_file))
+    engine = DiscoveryEngine(db)
+    project = engine.run_fast_path("Status Test", "Test truthful status reporting.")
+
+    sbx_base = tmp_path / "sandboxes"
+    mgr = SandboxManager(db, base_dir=str(sbx_base))
+    sbx = mgr.create_sandbox(project.id, task_id="truthful_task", isolation_type="directory")
+
+    # Approved shell action with no command payload must NOT claim EXECUTED
+    res = mgr.execute_sandbox_action(sbx, action_type="execute_shell", approved_by="DevLead")
+    assert res["allowed"] is True
+    assert res["status"] == "POLICY_APPROVED"
+    assert res["executed"] is False
+    assert "no command provided" in res["reason"]
+
+    # Approved modify_file action without content must NOT claim EXECUTED
+    res_mod = mgr.execute_sandbox_action(sbx, action_type="modify_file", approved_by="DevLead", context={"file": "file.txt"})
+    assert res_mod["allowed"] is True
+    assert res_mod["status"] == "POLICY_APPROVED"
+    assert res_mod["executed"] is False
+
+    # Automatically allowed action (read_repository) without command must NOT claim EXECUTED
+    res_read = mgr.execute_sandbox_action(sbx, action_type="read_repository")
+    assert res_read["allowed"] is True
+    assert res_read["status"] == "POLICY_APPROVED"
+    assert res_read["executed"] is False
+
+
+def test_sandbox_proxy_network_isolation(tmp_path):
+    db_file = tmp_path / "project.db"
+    db = Database(str(db_file))
+    mgr = SandboxManager(db, base_dir=str(tmp_path / "sbx"))
+    env = mgr._create_scrubbed_env()
+    assert env["HTTP_PROXY"] == "http://127.0.0.1:0"
+    assert env["HTTPS_PROXY"] == "http://127.0.0.1:0"
+    assert env["ALL_PROXY"] == "socks5://127.0.0.1:0"
+

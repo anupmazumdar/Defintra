@@ -139,6 +139,11 @@ defintra status
 defintra scan ./my-existing-app --name "Legacy API"
 ```
 
+The brownfield scanner extracts components, models, and contracts:
+- **Python (`.py`)**: Uses Python's standard library `ast` module to accurately extract FastAPI/Flask/Django route decorators (sync and async functions) and SQLAlchemy/Django database model classes and table names.
+- **JavaScript & TypeScript (`.js`, `.ts`)**: Uses pattern and regex extraction to discover Express router endpoints.
+- **SQL (`.sql`)**: Uses pattern and regex extraction for `CREATE TABLE` DDL statements.
+
 ### Context Compilation (The Core Engine)
 
 ```bash
@@ -411,13 +416,15 @@ Defintra coordinates the critical boundary between high-level architectural spec
 
 ### 1. Web Control Center & Session Authentication
 - **Localhost Binding & CORS Hardening**: `defintra ui` binds strictly to `127.0.0.1` and does not set wildcard `Access-Control-Allow-Origin` headers, blocking cross-origin JavaScript exfiltration from external web pages.
-- **Content Security Policy (CSP)**: HTML responses enforce a strict CSP (`default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self';`).
+- **Content Security Policy (CSP) & Referrer-Policy**: HTML responses enforce strict CSP (`default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self';`) and `Referrer-Policy: no-referrer` as defense in depth to prevent leaking navigation tokens to third-party referrers.
 - **Bootstrap Token Exchange & URL Sanitization**:
   - `defintra ui` generates an entropy-dense URL-safe bootstrap token (`secrets.token_urlsafe(24)`).
-  - On first load, the dashboard exchanges the token via a dedicated `POST /api/session` endpoint for a short-lived `HttpOnly; SameSite=Strict; Path=/` session cookie.
-  - The client immediately invokes `window.history.replaceState` to strip `?token=` from the browser address bar and history, preventing token exposure in terminal scrollback, browser navigation history, or process inspect tools.
+  - The client immediately invokes `window.history.replaceState(null, '', window.location.pathname)` synchronously on bootstrap to strip `?token=` from the browser address bar and history, preventing token exposure in browser navigation history or process inspectors.
+  - The dashboard exchanges the token via a dedicated `POST /api/session` endpoint for an `HttpOnly; SameSite=Strict; Path=/` session cookie.
   - All `/api/*` endpoints strictly reject `?token=` in query strings; they require either the HTTP-only session cookie or an explicit API header (`Authorization: Bearer <token>` / `X-Defintra-Token: <token>`).
-  - Single-use copy-pasting from remote terminals (e.g. over SSH port forwarding) is fully supported: opening the bootstrap link once establishes the secure session cookie and purges the token from the URL.
+- **Session Inactivity TTL & Token Rotation / Revocation**:
+  - Tokens enforce an 8-hour lifetime limit, and session cookies expire after 8 hours of inactivity.
+  - Leaked or compromised tokens can be immediately rotated via `POST /api/token/rotate` or revoked via `POST /api/token/revoke` (and via `defintra ui --revoke --token <token>`) without restarting the server process.
 
 ### 2. Defense-in-Depth Secret & Prompt-Injection Redaction
 - **Automated Ingestion Redaction**: User intent, PRDs, incident stack traces, and conflict resolution notes pass through `SecretRedactor.sanitize_all()`.
@@ -426,18 +433,24 @@ Defintra coordinates the critical boundary between high-level architectural spec
 - **Enforced at All Layers**: Sanitization is enforced at the entry point (REST, MCP, CLI), centrally within the engine layer (`DiscoveryEngine`, `ContextCompiler`, `TeamCoordinator`, `DecisionLedger`, `ConflictEngine`), and in SQLite persistence (`Database.save_*`).
 
 ### 3. Isolated Staging Worktrees & Subprocess Sandbox
-What **"Execution Sandbox"** means in Defintra post-fix:
+What **"Execution Sandbox"** means in Defintra:
 - **Physical Worktree Isolation**: Autonomous agent tasks are staged in separate Git worktrees (`git worktree add -b defintra/<project>/<task>`) isolated from the primary workspace.
 - **Filesystem Confinement**: `execute_sandbox_action()` verifies that all target file paths resolve inside `sandbox.worktree_path`, blocking path traversal escapes (`../`).
-- **Subprocess Execution Confinement**: When command execution is requested, actions execute in a subprocess strictly rooted at `cwd=sandbox.worktree_path`.
-- **Scrubbed Environment**: Host environment variables are scrubbed to prevent ambient credential leakage; any environment variable containing `KEY`, `TOKEN`, `SECRET`, `AUTH`, or `PASS` (e.g. `OPENAI_API_KEY`, `AWS_SECRET_ACCESS_KEY`) is stripped prior to launching the subprocess.
-- **Execution Timeouts**: A hard timeout (default 30 seconds) kills runaway or hanging processes (`status: TIMED_OUT`).
-- **Policy Engine Gate**: Risk-tiered policy evaluation blocks unauthorized actions (e.g. destructive table truncations or deployment) prior to subprocess invocation.
+- **Bounded Shell & File Execution**:
+  - `execute_shell`: When a command is supplied (`--command`), it executes in a subprocess strictly rooted at `cwd=sandbox.worktree_path` with scrubbed environment variables, disabled outbound proxies (`HTTP_PROXY="http://127.0.0.1:0"`), and a strict timeout (default 30 seconds).
+  - `modify_file`: When a target file and content are supplied (`--file`, `--content`), the file is written strictly within the sandbox worktree.
+- **Truthful Status Reporting**:
+  - Actions that execute return `status: "EXECUTED"` (or `"FAILED"` / `"TIMED_OUT"`), with `executed: True`.
+  - Actions evaluated without execution payloads (e.g. policy checks) return `status: "POLICY_APPROVED"` (or `"POLICY_DENIED"`), with `executed: False`. The system never reports `"EXECUTED"` if no execution occurred.
+  - The CLI provides `defintra sandbox authorize` to evaluate policy explicitly without running any action, and `defintra sandbox exec` to execute bounded actions.
 - **Boundary Clarification**: Defintra's sandbox provides **process-level, filesystem, and environment confinement**. It is **not** a hardware hypervisor, chroot jail, or microVM container (gVisor/Firecracker). Downstream integrators must not treat it as a hard multi-tenant isolation boundary against arbitrary untrusted binary execution.
 
 ### 4. Codebase Scanning & Path Traversal Guards
-- REST (`/api/scan`), MCP (`scan_repository`), and CLI (`defintra scan`) resolve repository paths and enforce workspace confinement.
+- REST (`/api/scan`), MCP (`scan_repository`), and CLI (`defintra scan`) resolve repository paths and enforce workspace confinement (`.relative_to(workspace_root)`).
 - External directory scanning via CLI requires explicit developer opt-in (`--allow-external`).
+- **AST and Heuristic Analysis**:
+  - Python files (`.py`) are parsed using Python's standard library `ast` module to accurately extract FastAPI/Flask/Django route decorators and SQLAlchemy/Django database models.
+  - JavaScript, TypeScript, and SQL files use pattern-based regex extraction.
 
 ---
 

@@ -191,6 +191,11 @@ class SandboxManager:
             if k_upper in allowed_base_vars:
                 if not any(sub in k_upper for sub in ("KEY", "TOKEN", "SECRET", "PASS", "AUTH", "CREDENTIAL")):
                     scrubbed[k] = v
+        # Network isolation: disable outbound proxying by default
+        scrubbed["HTTP_PROXY"] = "http://127.0.0.1:0"
+        scrubbed["HTTPS_PROXY"] = "http://127.0.0.1:0"
+        scrubbed["ALL_PROXY"] = "socks5://127.0.0.1:0"
+        scrubbed["NO_PROXY"] = ""
         return scrubbed
 
     def execute_sandbox_action(
@@ -201,23 +206,33 @@ class SandboxManager:
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Enforces policy boundaries, filesystem confinement, and isolated subprocess execution (§25, §45).
+        Enforces policy boundaries, filesystem confinement, and isolated execution (§25, §45).
         Refuses execution on DENY, unapproved REQUIRES_APPROVAL actions, or out-of-bounds file access.
-        When a command is provided in context, executes it in a confined subprocess within the worktree
-        using a scrubbed environment and a strict execution timeout.
+        
+        Execution Truthfulness:
+        - Pure policy checks without execution payloads return status 'POLICY_APPROVED' (or 'POLICY_DENIED').
+        - Real execution occurs when:
+          * action_type == 'execute_shell' (or context contains 'command'): runs confined subprocess with
+            scrubbed environment, proxy disabled, and strict timeout.
+          * action_type == 'modify_file' (with 'file' and 'content' in context): writes file strictly confined
+            within sandbox.worktree_path.
+        - Status 'EXECUTED' is ONLY returned when an actual action was executed successfully.
         """
-        if sandbox.worktree_path and context:
+        wt_root = Path(sandbox.worktree_path).resolve() if sandbox.worktree_path else None
+
+        if wt_root and context:
             target_path_str = context.get("file") or context.get("path") or context.get("file_path")
             if target_path_str:
-                wt_root = Path(sandbox.worktree_path).resolve()
+                target_p = Path(target_path_str)
+                target_abs = target_p.resolve() if target_p.is_absolute() else (wt_root / target_p).resolve()
                 try:
-                    target_abs = Path(target_path_str).resolve()
                     target_abs.relative_to(wt_root)
                 except ValueError:
                     return {
                         "sandbox_id": sandbox.sandbox_id,
                         "action_type": action_type,
                         "allowed": False,
+                        "executed": False,
                         "status": "BLOCKED",
                         "decision": "DENY",
                         "risk_level": "CRITICAL",
@@ -235,17 +250,28 @@ class SandboxManager:
             "sandbox_id": sandbox.sandbox_id,
             "action_type": action_type,
             "allowed": allowed,
-            "status": "EXECUTED" if allowed else "BLOCKED",
+            "executed": False,
+            "status": "POLICY_APPROVED" if allowed else "POLICY_DENIED",
             "decision": decision.decision.value,
             "risk_level": decision.risk_level.value,
             "reason": reason,
         }
 
-        # Subprocess execution isolation if command is requested
-        if allowed and context and "command" in context:
-            cmd = context["command"]
+        if not allowed:
+            if decision.decision.value == "DENY":
+                res["status"] = "BLOCKED"
+            return res
+
+        # 1. Bounded Execution for Shell Commands
+        has_command = context and ("command" in context or "cmd" in context)
+        if action_type == "execute_shell" or has_command:
+            cmd = context.get("command") or context.get("cmd") if context else None
+            if not cmd:
+                res["reason"] = f"{reason} (Policy evaluated: shell execution permitted, but no command provided)"
+                return res
+
             timeout = int(context.get("timeout", 30))
-            cwd_dir = sandbox.worktree_path if sandbox.worktree_path and Path(sandbox.worktree_path).exists() else str(self.base_dir)
+            cwd_dir = str(wt_root) if (wt_root and wt_root.exists()) else str(self.base_dir)
             clean_env = self._create_scrubbed_env()
 
             try:
@@ -263,10 +289,14 @@ class SandboxManager:
                 res["stdout"] = proc.stdout
                 res["stderr"] = proc.stderr
                 res["returncode"] = proc.returncode
+                res["executed"] = True
                 res["status"] = "EXECUTED" if proc.returncode == 0 else "FAILED"
+                if proc.returncode != 0:
+                    res["reason"] = f"Command exited with returncode {proc.returncode}"
             except subprocess.TimeoutExpired as te:
                 res["command"] = cmd
                 res["allowed"] = False
+                res["executed"] = False
                 res["status"] = "TIMED_OUT"
                 res["stdout"] = te.stdout or ""
                 res["stderr"] = te.stderr or ""
@@ -275,8 +305,56 @@ class SandboxManager:
             except Exception as e:
                 res["command"] = cmd
                 res["allowed"] = False
+                res["executed"] = False
                 res["status"] = "FAILED"
                 res["reason"] = f"Execution error: {str(e)}"
+
+            return res
+
+        # 2. Bounded Execution for File Modification
+        if action_type == "modify_file":
+            if not wt_root or not wt_root.exists():
+                res["status"] = "FAILED"
+                res["executed"] = False
+                res["reason"] = "Cannot modify file: sandbox worktree is not initialized on disk"
+                return res
+
+            target_path_str = context.get("file") or context.get("path") or context.get("file_path") if context else None
+            content = context.get("content") if context else None
+
+            if target_path_str is not None and content is not None:
+                target_p = Path(target_path_str)
+                target_abs = target_p.resolve() if target_p.is_absolute() else (wt_root / target_p).resolve()
+                try:
+                    target_abs.relative_to(wt_root)
+                except ValueError:
+                    return {
+                        "sandbox_id": sandbox.sandbox_id,
+                        "action_type": action_type,
+                        "allowed": False,
+                        "executed": False,
+                        "status": "BLOCKED",
+                        "decision": "DENY",
+                        "risk_level": "CRITICAL",
+                        "reason": f"Path escape violation: '{target_path_str}' is outside sandbox worktree '{sandbox.worktree_path}'",
+                    }
+
+                try:
+                    target_abs.parent.mkdir(parents=True, exist_ok=True)
+                    target_abs.write_text(content, encoding="utf-8")
+                    res["executed"] = True
+                    res["status"] = "EXECUTED"
+                    res["file_modified"] = str(target_abs)
+                    res["bytes_written"] = len(content.encode("utf-8"))
+                    res["reason"] = f"File successfully written within sandbox worktree: {target_abs.name}"
+                except Exception as e:
+                    res["executed"] = False
+                    res["status"] = "FAILED"
+                    res["reason"] = f"Failed to write file in sandbox: {str(e)}"
+            else:
+                res["reason"] = f"{reason} (Policy evaluated: modify_file permitted, but no content supplied for execution)"
+
+            return res
 
         return res
 
