@@ -405,6 +405,57 @@ Defintra/
 
 ---
 
+## 🔒 Security Model
+
+Defintra manages the critical interface between architectural specifications and autonomous coding agents. Because Defintra context directly drives LLM code generation, any compromise of the knowledge graph creates downstream supply-chain risks.
+
+### Trust Boundaries & Threat Model
+
+1. **Host Trust & Single-User Assumption**: Defintra assumes it operates on a secure, single-user workstation with OS-level full-disk encryption. File permissions on `.defintra/project.db` default to the user's umask and are not restricted to `0600` automatically.
+2. **Context Poisoning Risk (Unique to Spec Compilers)**: Any decision recorded in the graph with `PROPOSED` status is currently included in compiled prompts under the `## Mandatory Architectural Decisions (LOCKED)` block. An adversarial or prompt-injected agent invoking `propose_decision` via MCP can poison the context supplied to subsequent coding agents, inducing them to introduce backdoors, weaken cryptographic primitives, or leak sensitive data.
+3. **No Execution Sandbox**: The staging environment (`defintra sandbox`) is currently an **in-memory policy simulator**, not an execution boundary. It does not spawn OS containers, chroot jails, virtual machines, or isolated Git worktrees. Agents executing commands inside a sandbox have full access to the host environment.
+4. **Web UI Localhost Exposure**: The local dashboard (`defintra ui` on `127.0.0.1:8765`) runs without authentication, lacks CSRF protection, and serves all API endpoints with `Access-Control-Allow-Origin: *`. Any malicious webpage opened in a developer's browser can execute cross-origin `fetch()` requests to exfiltrate the full knowledge graph or trigger local directory scans.
+
+### Prohibitions & Mandatory Precautions
+
+- **DO NOT** bind `defintra ui` to public interfaces (`0.0.0.0`) or expose port 8765 across local networks or tunnels.
+- **DO NOT** point `defintra scan` at untrusted or adversary-controlled codebases; scanning reads unbounded files into memory and accepts arbitrary host filesystem paths.
+- **DO NOT** execute untrusted scripts or shell commands under the assumption that `defintra sandbox` isolates host execution.
+- **DO NOT** pipe compiled agent context directly into autonomous agents with destructive terminal permissions without human-in-the-loop review of locked decisions.
+
+---
+
+## 🛡️ Data & Privacy
+
+### Storage Locations
+
+| Artifact | Default Location | Description | Tracked in Git? |
+| :--- | :--- | :--- | :--- |
+| **Knowledge Graph** | `.defintra/project.db` | Local SQLite database storing entities, requirements, and ledger | ❌ Ignored (`.gitignore`) |
+| **Exported Specs** | `.defintra/export/` | DIR JSON schemas, markdown specs, and ADR files | ❌ Ignored (`.gitignore`) |
+| **Agent Rule Files** | `.cursorrules`, `CLAUDE.md`, `AGENTS.md` | Workspace root files generated via `defintra export --rules` | ⚠️ **TRACKED BY DEFAULT** |
+
+### Plaintext Secrets & Lack of Ingestion Redaction
+
+> [!WARNING]
+> Defintra does not currently run automated secret detection or redaction on ingested text. If API keys, passwords, connection strings, or JWTs are included in PRDs, brownfield source code, or incident stack traces, they are persisted **in plaintext** inside `.defintra/project.db` and serialized into `.defintra/export/`. Furthermore, exporting rules to `.cursorrules` or `CLAUDE.md` can inadvertently leak credentials into your Git repository.
+
+Always manually sanitize input PRDs and stack traces prior to running `defintra analyze` or `defintra incident`.
+
+### Right-to-Erasure & Data Purging
+
+Defintra stores all persistent state locally. To completely purge a project's data, knowledge graph, and exports (right-to-erasure):
+
+```bash
+# Delete all project state and local SQLite databases
+rm -rf .defintra/
+
+# Remove exported agent rule files from workspace root
+rm -f .cursorrules CLAUDE.md AGENTS.md
+```
+
+---
+
 ## 📄 License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
