@@ -236,8 +236,8 @@ Model-agnostic adapters (OpenAI, Claude Code, Gemini, Antigravity, local models)
 
 ---
 
-## 25. Sandbox & Staging
-Isolates execution with Git branches, worktrees, containers, temporary databases, and controlled network access.
+## 25. Isolated Staging Worktree & Subprocess Sandbox
+Isolates autonomous execution with dedicated Git branches and worktrees (`sandbox.worktree_path`), path traversal confinement, scrubbed environment variables (stripping host API keys and tokens), policy-gated action checks, and hard execution timeouts.
 
 ---
 

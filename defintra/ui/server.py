@@ -8,9 +8,10 @@ import json
 import secrets
 import urllib.parse
 import webbrowser
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
 from defintra.core.conflicts.engine import ConflictEngine
@@ -19,14 +20,17 @@ from defintra.core.discovery.engine import DiscoveryEngine
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.governance.stability import StabilityBudgetEngine
 from defintra.core.graph.engine import ProjectGraph
+from defintra.core.models.entities import current_utc_time
 from defintra.core.operations.feedback import IncidentTracer
 from defintra.core.operations.runbooks import RunbookGenerator
+from defintra.core.security.redactor import SecretRedactor
 from defintra.core.team.coordinator import TeamCoordinator
 
 
 class DefintraAPIHandler(BaseHTTPRequestHandler):
     db_path: str = ".defintra/project.db"
     auth_token: Optional[str] = None
+    active_sessions: Dict[str, str] = {}
 
     def _get_db(self) -> Database:
         return Database(self.db_path)
@@ -34,22 +38,40 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
     def _check_auth(self) -> bool:
         if self.auth_token is None:
             return False
-        # 1. Check Authorization header: Bearer <token>
+
+        # 1. Check Session Cookie: defintra_session=<session_id>
+        cookie_header = self.headers.get("Cookie", "")
+        if cookie_header:
+            cookies = SimpleCookie()
+            try:
+                cookies.load(cookie_header)
+                if "defintra_session" in cookies:
+                    session_id = cookies["defintra_session"].value
+                    if session_id in self.active_sessions:
+                        return True
+            except Exception:
+                pass
+
+        # 2. Check Authorization header: Bearer <token>
         auth_header = self.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
             if secrets.compare_digest(token, self.auth_token):
                 return True
-        # 2. Check X-Defintra-Token header
+
+        # 3. Check X-Defintra-Token header
         custom_header = self.headers.get("X-Defintra-Token", "").strip()
         if custom_header and secrets.compare_digest(custom_header, self.auth_token):
             return True
-        # 3. Check query param ?token=
+
+        # 4. Check query param ?token= ONLY on the initial bootstrap HTML load (/ or /index.html)
         parsed = urllib.parse.urlparse(self.path)
-        query = urllib.parse.parse_qs(parsed.query)
-        q_token = query.get("token", [""])[0]
-        if q_token and secrets.compare_digest(q_token, self.auth_token):
-            return True
+        if parsed.path in ("/", "/index.html"):
+            query = urllib.parse.parse_qs(parsed.query)
+            q_token = query.get("token", [""])[0]
+            if q_token and secrets.compare_digest(q_token, self.auth_token):
+                return True
+
         return False
 
     def _send_json(self, data: Any, status: int = 200):
@@ -60,7 +82,7 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_html(self, html_content: str, status: int = 200):
+    def _send_html(self, html_content: str, status: int = 200, set_cookie: Optional[str] = None):
         body = html_content.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -69,6 +91,8 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';",
         )
+        if set_cookie:
+            self.send_header("Set-Cookie", set_cookie)
         self.end_headers()
         self.wfile.write(body)
 
@@ -82,11 +106,37 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/session":
+            cookie_header = self.headers.get("Cookie", "")
+            if cookie_header:
+                cookies = SimpleCookie()
+                try:
+                    cookies.load(cookie_header)
+                    if "defintra_session" in cookies:
+                        sess_id = cookies["defintra_session"].value
+                        self.active_sessions.pop(sess_id, None)
+                except Exception:
+                    pass
+            body = json.dumps({"status": "logged_out"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header(
+                "Set-Cookie",
+                "defintra_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+            )
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_error(404, "Not Found")
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        if path == "/" or path == "/index.html":
+        if path in ("/", "/index.html"):
             if not self._check_auth():
                 unauth_html = (
                     "<!DOCTYPE html><html><head><title>401 Unauthorized - Defintra</title>"
@@ -97,11 +147,20 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 self._send_html(unauth_html, status=401)
                 return
 
+            # Attach session cookie if authenticated via query param token
+            cookie_hdr = None
+            query = urllib.parse.parse_qs(parsed.query)
+            q_token = query.get("token", [""])[0]
+            if q_token and self.auth_token and secrets.compare_digest(q_token, self.auth_token):
+                session_id = secrets.token_urlsafe(32)
+                self.active_sessions[session_id] = current_utc_time()
+                cookie_hdr = f"defintra_session={session_id}; HttpOnly; SameSite=Strict; Path=/"
+
             html_file = Path(__file__).parent / "dashboard.html"
             if html_file.exists():
-                self._send_html(html_file.read_text(encoding="utf-8"))
+                self._send_html(html_file.read_text(encoding="utf-8"), set_cookie=cookie_hdr)
             else:
-                self._send_html("<h1>Defintra Dashboard Loading...</h1>")
+                self._send_html("<h1>Defintra Dashboard Loading...</h1>", set_cookie=cookie_hdr)
             return
 
         if not self._check_auth():
@@ -256,15 +315,36 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
     def do_POST(self):
-        if not self._check_auth():
-            self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
-            return
-
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         length = int(self.headers.get("Content-Length", 0))
         body_bytes = self.rfile.read(length) if length > 0 else b"{}"
         payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+
+        # 1. Dedicated session exchange endpoint for bootstrap token
+        if path == "/api/session":
+            req_token = payload.get("token", "")
+            if self.auth_token and req_token and secrets.compare_digest(req_token, self.auth_token):
+                session_id = secrets.token_urlsafe(32)
+                self.active_sessions[session_id] = current_utc_time()
+                body = json.dumps({"status": "authenticated", "session_id": session_id}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header(
+                    "Set-Cookie",
+                    f"defintra_session={session_id}; HttpOnly; SameSite=Strict; Path=/",
+                )
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            else:
+                self._send_json({"error": "Unauthorized: Invalid bootstrap token"}, 401)
+                return
+
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
+            return
 
         db = self._get_db()
         project = db.get_first_project()
@@ -274,13 +354,14 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
 
         if path == "/api/answer":
             unk_id = payload.get("unknown_id")
-            answer = payload.get("answer", "")
+            answer = SecretRedactor.sanitize_all(payload.get("answer", ""))
             engine = DiscoveryEngine(db)
             report = engine.answer_unknown(project.id, unk_id, answer)
             self._send_json({"status": "OK", "health": report.to_dict()})
 
         elif path == "/api/compile":
-            task = payload.get("task", "Implement core features")
+            raw_task = payload.get("task", "Implement core features")
+            task = SecretRedactor.sanitize_all(raw_task)
             role_str = payload.get("role", "GENERAL")
             target_str = payload.get("target", "markdown")
             try:
@@ -302,19 +383,22 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         elif path == "/api/conflicts/resolve":
             cid = payload.get("conflict_id")
             winner_id = payload.get("winner_id")
-            notes = payload.get("notes", "Resolved in Web Dashboard")
+            raw_notes = payload.get("notes", "Resolved in Web Dashboard")
+            notes = SecretRedactor.sanitize_all(raw_notes)
             conf_engine = ConflictEngine(db)
             resolved = conf_engine.resolve_conflict(project.id, cid, notes, winner_id)
             self._send_json(resolved.model_dump())
 
         elif path == "/api/incident":
-            error_text = payload.get("error_text", "")
+            raw_error = payload.get("error_text", "")
+            error_text = SecretRedactor.sanitize_all(raw_error)
             tracer = IncidentTracer(db)
             report = tracer.trace_incident(error_text, project.id)
             self._send_json(report.to_dict())
 
         elif path == "/api/team/dispatch":
-            task = payload.get("task", "")
+            raw_task = payload.get("task", "")
+            task = SecretRedactor.sanitize_all(raw_task)
             role_str = payload.get("role", "SOFTWARE_ARCHITECT")
             try:
                 role = AgentRole[role_str.upper()]

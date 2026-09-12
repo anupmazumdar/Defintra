@@ -67,8 +67,8 @@ class BrownfieldScanner:
         project_id: Optional[str] = None,
     ) -> ScanReport:
         root = Path(repo_path).resolve()
-        if not root.exists():
-            raise FileNotFoundError(f"Target repository path '{repo_path}' does not exist.")
+        if not root.exists() or not root.is_dir():
+            raise FileNotFoundError(f"Target repository path '{repo_path}' does not exist or is not a directory.")
 
         p_name = project_name or root.name
         p_id = project_id or re.sub(r"[^a-zA-Z0-9_-]", "_", p_name.lower().strip())

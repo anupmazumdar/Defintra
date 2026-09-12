@@ -392,6 +392,7 @@ class DiscoveryEngine:
         - Converts answer into an approved Fact / Decision or Assumption
         - Recalculates Spec Health & Entropy
         """
+        user_answer = SecretRedactor.sanitize_all(user_answer)
         unknowns = self.db.get_unknowns(project_id)
         target = next((u for u in unknowns if u.id == unknown_id), None)
         if target:

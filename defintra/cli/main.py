@@ -234,15 +234,32 @@ def compile_task(
 def scan(
     repo_path: str = typer.Argument(".", help="Path to existing codebase directory to scan"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Project name for the scanned repository"),
+    allow_external: bool = typer.Option(False, "--allow-external", help="Allow scanning outside workspace root"),
 ):
     """
     Ingest an existing codebase into the Defintra knowledge graph (Brownfield Ingestion §1.5, §45).
     """
+    target = Path(repo_path).resolve()
+    if not target.exists() or not target.is_dir():
+        console.print(f"[bold red]Error: Target repository path '{repo_path}' is not an existing directory.[/bold red]")
+        raise typer.Exit(1)
+
+    workspace_root = Path(".").resolve()
+    if not allow_external:
+        try:
+            target.relative_to(workspace_root)
+        except ValueError:
+            console.print(
+                f"[bold red]Security Error: Path traversal rejected. '{repo_path}' resolves outside current workspace.[/bold red]\n"
+                "[dim]Use --allow-external if you intended to scan an external directory.[/dim]"
+            )
+            raise typer.Exit(1)
+
     db = get_db()
     scanner = BrownfieldScanner(db)
 
-    with console.status(f"[bold cyan]Scanning codebase at '{repo_path}'..."):
-        report = scanner.scan_repository(repo_path, project_name=name)
+    with console.status(f"[bold cyan]Scanning codebase at '{target}'..."):
+        report = scanner.scan_repository(str(target), project_name=name)
 
     console.print(
         Panel(

@@ -19,6 +19,7 @@ from defintra.core.models.entities import (
     SourceType,
     current_utc_time,
 )
+from defintra.core.security.redactor import SecretRedactor
 
 
 class DecisionLedger:
@@ -40,6 +41,9 @@ class DecisionLedger:
         source: str = "Human Architecture Review",
         source_type: SourceType = SourceType.USER_EXPLICIT,
     ) -> Decision:
+        title = SecretRedactor.sanitize_all(title)
+        decision = SecretRedactor.sanitize_all(decision)
+        reason = SecretRedactor.sanitize_all(reason)
         dec = Decision(
             id=decision_id,
             project_id=project_id,

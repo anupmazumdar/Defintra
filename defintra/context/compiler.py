@@ -20,6 +20,7 @@ from defintra.core.models.entities import (
     Requirement,
     RequirementPriority,
 )
+from defintra.core.security.redactor import SecretRedactor
 
 
 class TargetFormat(str, Enum):
@@ -296,6 +297,8 @@ class ContextCompiler:
         project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
         if not project:
             raise ValueError("No active project found in database.")
+
+        task_description = SecretRedactor.sanitize_all(task_description)
 
         reqs = self.db.get_requirements(project.id)
         decs = self.db.get_decisions(project.id)

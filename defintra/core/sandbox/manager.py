@@ -5,6 +5,7 @@ snapshot hashes, and pre-production governance gates.
 """
 
 import hashlib
+import os
 import shutil
 import subprocess
 import uuid
@@ -164,6 +165,34 @@ class SandboxManager:
         """
         return self.policy_engine.evaluate_action(project_id, action_type, context=context)
 
+    def _create_scrubbed_env(self) -> Dict[str, str]:
+        """
+        Creates a minimal, scrubbed environment for sandbox execution.
+        Strips sensitive API keys, cloud tokens, database URLs, and credentials.
+        """
+        allowed_base_vars = {
+            "PATH",
+            "PATHEXT",
+            "SYSTEMROOT",
+            "WINDIR",
+            "COMSPEC",
+            "TEMP",
+            "TMP",
+            "HOME",
+            "USERPROFILE",
+            "LANG",
+            "LC_ALL",
+            "TERM",
+            "PYTHONPATH",
+        }
+        scrubbed = {}
+        for k, v in os.environ.items():
+            k_upper = k.upper()
+            if k_upper in allowed_base_vars:
+                if not any(sub in k_upper for sub in ("KEY", "TOKEN", "SECRET", "PASS", "AUTH", "CREDENTIAL")):
+                    scrubbed[k] = v
+        return scrubbed
+
     def execute_sandbox_action(
         self,
         sandbox: SandboxState,
@@ -172,8 +201,10 @@ class SandboxManager:
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Enforces policy boundaries and filesystem sandbox confinement on actions executed inside the sandbox (§25, §45).
+        Enforces policy boundaries, filesystem confinement, and isolated subprocess execution (§25, §45).
         Refuses execution on DENY, unapproved REQUIRES_APPROVAL actions, or out-of-bounds file access.
+        When a command is provided in context, executes it in a confined subprocess within the worktree
+        using a scrubbed environment and a strict execution timeout.
         """
         if sandbox.worktree_path and context:
             target_path_str = context.get("file") or context.get("path") or context.get("file_path")
@@ -200,7 +231,7 @@ class SandboxManager:
             context=context,
         )
 
-        return {
+        res: Dict[str, Any] = {
             "sandbox_id": sandbox.sandbox_id,
             "action_type": action_type,
             "allowed": allowed,
@@ -209,6 +240,45 @@ class SandboxManager:
             "risk_level": decision.risk_level.value,
             "reason": reason,
         }
+
+        # Subprocess execution isolation if command is requested
+        if allowed and context and "command" in context:
+            cmd = context["command"]
+            timeout = int(context.get("timeout", 30))
+            cwd_dir = sandbox.worktree_path if sandbox.worktree_path and Path(sandbox.worktree_path).exists() else str(self.base_dir)
+            clean_env = self._create_scrubbed_env()
+
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    shell=True,
+                    cwd=cwd_dir,
+                    env=clean_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    check=False,
+                )
+                res["command"] = cmd
+                res["stdout"] = proc.stdout
+                res["stderr"] = proc.stderr
+                res["returncode"] = proc.returncode
+                res["status"] = "EXECUTED" if proc.returncode == 0 else "FAILED"
+            except subprocess.TimeoutExpired as te:
+                res["command"] = cmd
+                res["allowed"] = False
+                res["status"] = "TIMED_OUT"
+                res["stdout"] = te.stdout or ""
+                res["stderr"] = te.stderr or ""
+                res["returncode"] = -1
+                res["reason"] = f"Command execution timed out after {timeout}s limit"
+            except Exception as e:
+                res["command"] = cmd
+                res["allowed"] = False
+                res["status"] = "FAILED"
+                res["reason"] = f"Execution error: {str(e)}"
+
+        return res
 
     def validate_governance_gate(
         self,

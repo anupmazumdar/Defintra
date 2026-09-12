@@ -788,13 +788,27 @@
     }
 
     const urlParams = new URLSearchParams(window.location.search);
-    let sessionToken = urlParams.get('token') || sessionStorage.getItem('defintra_token') || '';
-    if (sessionToken) {
-      sessionStorage.setItem('defintra_token', sessionToken);
+    const bootstrapToken = urlParams.get('token');
+    let sessionToken = bootstrapToken || sessionStorage.getItem('defintra_token') || '';
+
+    if (bootstrapToken) {
+      // Exchange bootstrap token for HttpOnly session cookie and clear URL history
+      fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: bootstrapToken })
+      }).then(res => {
+        if (res.ok) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          sessionStorage.removeItem('defintra_token');
+          sessionToken = '';
+        }
+      }).catch(err => console.error('Session handshake error:', err));
     }
 
     async function apiFetch(url, options = {}) {
       options.headers = options.headers || {};
+      options.credentials = 'same-origin';
       if (sessionToken) {
         options.headers['Authorization'] = `Bearer ${sessionToken}`;
         options.headers['X-Defintra-Token'] = sessionToken;

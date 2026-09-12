@@ -12,6 +12,7 @@ from defintra.core.models.entities import (
     ArtifactState,
     Conflict,
 )
+from defintra.core.security.redactor import SecretRedactor
 
 
 class ConflictEngine:
@@ -131,7 +132,7 @@ class ConflictEngine:
             raise ValueError(f"Conflict with ID '{conflict_id}' not found in project '{project_id}'.")
 
         target.status = "RESOLVED"
-        target.resolution = resolution_notes
+        target.resolution = SecretRedactor.sanitize_all(resolution_notes)
         self.db.save_conflict(target)
 
         # If a winning entity was chosen, update the loser

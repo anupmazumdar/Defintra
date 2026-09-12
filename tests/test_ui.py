@@ -90,9 +90,16 @@ def test_ui_get_html_and_state(running_ui_server):
         assert "nodes" in data
         assert len(data["nodes"]) >= 3
 
-    # 4. Token via query param
-    with urllib.request.urlopen(f"{running_ui_server}/api/state?token={TEST_TOKEN}") as res:
+    # 4. Token via query param: allowed on bootstrap HTML route (/), rejected on API routes to prevent URL leak
+    with urllib.request.urlopen(f"{running_ui_server}/?token={TEST_TOKEN}") as res:
         assert res.status == 200
+        assert "defintra_session=" in res.headers.get("Set-Cookie", "")
+
+    try:
+        urllib.request.urlopen(f"{running_ui_server}/api/state?token={TEST_TOKEN}")
+        assert False, "API route must reject ?token= query param"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
 
 
 def test_ui_post_actions(running_ui_server):

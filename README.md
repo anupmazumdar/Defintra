@@ -407,21 +407,37 @@ Defintra/
 
 ## 🔒 Security Model
 
-Defintra manages the critical interface between architectural specifications and autonomous coding agents. Because Defintra context directly drives LLM code generation, any compromise of the knowledge graph creates downstream supply-chain risks.
+Defintra coordinates the critical boundary between high-level architectural specifications and autonomous coding agents. Context compiled by Defintra directly drives LLM code synthesis and automated tool execution. The following security architecture governs local deployment:
 
-### Trust Boundaries & Threat Model
+### 1. Web Control Center & Session Authentication
+- **Localhost Binding & CORS Hardening**: `defintra ui` binds strictly to `127.0.0.1` and does not set wildcard `Access-Control-Allow-Origin` headers, blocking cross-origin JavaScript exfiltration from external web pages.
+- **Content Security Policy (CSP)**: HTML responses enforce a strict CSP (`default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self';`).
+- **Bootstrap Token Exchange & URL Sanitization**:
+  - `defintra ui` generates an entropy-dense URL-safe bootstrap token (`secrets.token_urlsafe(24)`).
+  - On first load, the dashboard exchanges the token via a dedicated `POST /api/session` endpoint for a short-lived `HttpOnly; SameSite=Strict; Path=/` session cookie.
+  - The client immediately invokes `window.history.replaceState` to strip `?token=` from the browser address bar and history, preventing token exposure in terminal scrollback, browser navigation history, or process inspect tools.
+  - All `/api/*` endpoints strictly reject `?token=` in query strings; they require either the HTTP-only session cookie or an explicit API header (`Authorization: Bearer <token>` / `X-Defintra-Token: <token>`).
+  - Single-use copy-pasting from remote terminals (e.g. over SSH port forwarding) is fully supported: opening the bootstrap link once establishes the secure session cookie and purges the token from the URL.
 
-1. **Host Trust & Single-User Assumption**: Defintra assumes it operates on a secure, single-user workstation with OS-level full-disk encryption. File permissions on `.defintra/project.db` default to the user's umask and are not restricted to `0600` automatically.
-2. **Context Poisoning Risk (Unique to Spec Compilers)**: Any decision recorded in the graph with `PROPOSED` status is currently included in compiled prompts under the `## Mandatory Architectural Decisions (LOCKED)` block. An adversarial or prompt-injected agent invoking `propose_decision` via MCP can poison the context supplied to subsequent coding agents, inducing them to introduce backdoors, weaken cryptographic primitives, or leak sensitive data.
-3. **No Execution Sandbox**: The staging environment (`defintra sandbox`) is currently an **in-memory policy simulator**, not an execution boundary. It does not spawn OS containers, chroot jails, virtual machines, or isolated Git worktrees. Agents executing commands inside a sandbox have full access to the host environment.
-4. **Web UI Localhost Exposure**: The local dashboard (`defintra ui` on `127.0.0.1:8765`) runs without authentication, lacks CSRF protection, and serves all API endpoints with `Access-Control-Allow-Origin: *`. Any malicious webpage opened in a developer's browser can execute cross-origin `fetch()` requests to exfiltrate the full knowledge graph or trigger local directory scans.
+### 2. Defense-in-Depth Secret & Prompt-Injection Redaction
+- **Automated Ingestion Redaction**: User intent, PRDs, incident stack traces, and conflict resolution notes pass through `SecretRedactor.sanitize_all()`.
+- **Credential Detection**: Real-time regex pattern scanners identify and replace Anthropic keys (`sk-ant-...`), OpenAI keys (`sk-proj-...`), GitHub tokens (`ghp_...`), AWS access keys (`AKIA...`), database connection strings with passwords, private keys, and JWTs with `[REDACTED_SECRET:<TYPE>]`.
+- **Prompt Injection Defense**: Neutralizes LLM escape tags (such as `</defintra_context>`, `<|im_start|>`, `[INST]`, `<system>`) before persistence to prevent context hijacking in downstream coding agents.
+- **Enforced at All Layers**: Sanitization is enforced at the entry point (REST, MCP, CLI), centrally within the engine layer (`DiscoveryEngine`, `ContextCompiler`, `TeamCoordinator`, `DecisionLedger`, `ConflictEngine`), and in SQLite persistence (`Database.save_*`).
 
-### Prohibitions & Mandatory Precautions
+### 3. Isolated Staging Worktrees & Subprocess Sandbox
+What **"Execution Sandbox"** means in Defintra post-fix:
+- **Physical Worktree Isolation**: Autonomous agent tasks are staged in separate Git worktrees (`git worktree add -b defintra/<project>/<task>`) isolated from the primary workspace.
+- **Filesystem Confinement**: `execute_sandbox_action()` verifies that all target file paths resolve inside `sandbox.worktree_path`, blocking path traversal escapes (`../`).
+- **Subprocess Execution Confinement**: When command execution is requested, actions execute in a subprocess strictly rooted at `cwd=sandbox.worktree_path`.
+- **Scrubbed Environment**: Host environment variables are scrubbed to prevent ambient credential leakage; any environment variable containing `KEY`, `TOKEN`, `SECRET`, `AUTH`, or `PASS` (e.g. `OPENAI_API_KEY`, `AWS_SECRET_ACCESS_KEY`) is stripped prior to launching the subprocess.
+- **Execution Timeouts**: A hard timeout (default 30 seconds) kills runaway or hanging processes (`status: TIMED_OUT`).
+- **Policy Engine Gate**: Risk-tiered policy evaluation blocks unauthorized actions (e.g. destructive table truncations or deployment) prior to subprocess invocation.
+- **Boundary Clarification**: Defintra's sandbox provides **process-level, filesystem, and environment confinement**. It is **not** a hardware hypervisor, chroot jail, or microVM container (gVisor/Firecracker). Downstream integrators must not treat it as a hard multi-tenant isolation boundary against arbitrary untrusted binary execution.
 
-- **DO NOT** bind `defintra ui` to public interfaces (`0.0.0.0`) or expose port 8765 across local networks or tunnels.
-- **DO NOT** point `defintra scan` at untrusted or adversary-controlled codebases; scanning reads unbounded files into memory and accepts arbitrary host filesystem paths.
-- **DO NOT** execute untrusted scripts or shell commands under the assumption that `defintra sandbox` isolates host execution.
-- **DO NOT** pipe compiled agent context directly into autonomous agents with destructive terminal permissions without human-in-the-loop review of locked decisions.
+### 4. Codebase Scanning & Path Traversal Guards
+- REST (`/api/scan`), MCP (`scan_repository`), and CLI (`defintra scan`) resolve repository paths and enforce workspace confinement.
+- External directory scanning via CLI requires explicit developer opt-in (`--allow-external`).
 
 ---
 

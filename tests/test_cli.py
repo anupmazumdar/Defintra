@@ -99,7 +99,7 @@ def test_cli_expanded_commands(monkeypatch):
         assert "Isolated Sandbox Created" in res_sandbox.output
 
         # 5. Scan
-        res_scan = runner.invoke(app, ["scan", tmpdir, "--name", "Tmp Scanned"])
+        res_scan = runner.invoke(app, ["scan", tmpdir, "--name", "Tmp Scanned", "--allow-external"])
         assert res_scan.exit_code == 0
         assert "Repository Ingested Successfully" in res_scan.output
 

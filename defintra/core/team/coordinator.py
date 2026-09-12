@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from defintra.context.compiler import AgentRole, ContextCompiler
 from defintra.core.db.database import Database
 from defintra.core.models.entities import current_utc_time
+from defintra.core.security.redactor import SecretRedactor
 
 
 class StructuredEventType(str, Enum):
@@ -266,6 +267,8 @@ class TeamCoordinator:
         project = self.db.get_project(project_id)
         if not project:
             raise ValueError(f"Project '{project_id}' not found.")
+
+        task_title = SecretRedactor.sanitize_all(task_title)
 
         # 1. Compile context for this specific role
         compiled = self.compiler.compile(

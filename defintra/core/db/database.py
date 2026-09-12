@@ -79,7 +79,7 @@ class Database:
                 (
                     project.id,
                     project.name,
-                    SecretRedactor.redact(project.objective),
+                    SecretRedactor.sanitize_all(project.objective),
                     project.owner_id,
                     project.domain,
                     project.source_type,
@@ -197,15 +197,15 @@ class Database:
                 (
                     req.id,
                     req.project_id,
-                    SecretRedactor.redact(req.title),
-                    SecretRedactor.redact(req.description),
+                    SecretRedactor.sanitize_all(req.title),
+                    SecretRedactor.sanitize_all(req.description),
                     req.ears_pattern.value,
                     req.priority.value,
                     req.status.value,
                     req.category,
                     json.dumps(req.affected_components),
-                    json.dumps([SecretRedactor.redact(c) for c in req.constraints]),
-                    json.dumps([SecretRedactor.redact(a) for a in req.acceptance_criteria]),
+                    json.dumps([SecretRedactor.sanitize_all(c) for c in req.constraints]),
+                    json.dumps([SecretRedactor.sanitize_all(a) for a in req.acceptance_criteria]),
                     req.provenance.model_dump_json(),
                     req.created_at,
                 ),
@@ -245,7 +245,14 @@ class Database:
     # ==========================================
     def save_decision(self, dec: Decision):
         with self._get_connection() as conn:
-            rejected_alts = [alt.model_dump() for alt in dec.rejected_alternatives]
+            rejected_alts = [
+                {
+                    "alternative": SecretRedactor.sanitize_all(alt.alternative),
+                    "reason_rejected": SecretRedactor.sanitize_all(alt.reason_rejected),
+                    "proposed_by": alt.proposed_by,
+                }
+                for alt in dec.rejected_alternatives
+            ]
             conn.execute(
                 """
                 INSERT INTO decisions (
@@ -268,9 +275,9 @@ class Database:
                 (
                     dec.id,
                     dec.project_id,
-                    SecretRedactor.redact(dec.title),
-                    SecretRedactor.redact(dec.decision),
-                    SecretRedactor.redact(dec.reason),
+                    SecretRedactor.sanitize_all(dec.title),
+                    SecretRedactor.sanitize_all(dec.decision),
+                    SecretRedactor.sanitize_all(dec.reason),
                     json.dumps(rejected_alts),
                     dec.status.value,
                     dec.approval_level.value,
@@ -331,7 +338,7 @@ class Database:
                 (
                     asm.id,
                     asm.project_id,
-                    SecretRedactor.redact(asm.statement),
+                    SecretRedactor.sanitize_all(asm.statement),
                     asm.category,
                     asm.confidence,
                     asm.status,
@@ -380,11 +387,11 @@ class Database:
                 (
                     unk.id,
                     unk.project_id,
-                    SecretRedactor.redact(unk.question),
+                    SecretRedactor.sanitize_all(unk.question),
                     unk.impact,
                     unk.category,
                     unk.status,
-                    SecretRedactor.redact(unk.resolution) if unk.resolution else None,
+                    SecretRedactor.sanitize_all(unk.resolution) if unk.resolution else None,
                     unk.priority_order,
                     unk.created_at,
                 ),
@@ -438,9 +445,9 @@ class Database:
                     ev.target_entity_type.value,
                     ev.target_entity_id,
                     ev.evidence_type,
-                    ev.description,
+                    SecretRedactor.sanitize_all(ev.description),
                     ev.confidence,
-                    ev.source,
+                    SecretRedactor.sanitize_all(ev.source),
                     ev.approved_by,
                     ev.created_at,
                 ),
@@ -496,8 +503,8 @@ class Database:
                 (
                     entry.id,
                     entry.project_id,
-                    entry.silent_assumption,
-                    entry.reason_skipped,
+                    SecretRedactor.sanitize_all(entry.silent_assumption),
+                    SecretRedactor.sanitize_all(entry.reason_skipped),
                     entry.risk_level.value,
                     entry.category,
                     entry.created_at,
@@ -543,9 +550,9 @@ class Database:
                 (
                     comp.id,
                     comp.project_id,
-                    comp.name,
+                    SecretRedactor.sanitize_all(comp.name),
                     comp.component_type,
-                    comp.description,
+                    SecretRedactor.sanitize_all(comp.description),
                     comp.stability_state.value,
                     json.dumps(comp.blast_radius),
                     comp.created_at,
@@ -631,13 +638,13 @@ class Database:
                 (
                     conflict.id,
                     conflict.project_id,
-                    conflict.title,
-                    conflict.description,
+                    SecretRedactor.sanitize_all(conflict.title),
+                    SecretRedactor.sanitize_all(conflict.description),
                     conflict.entity_a_ref,
                     conflict.entity_b_ref,
                     conflict.severity,
                     conflict.status,
-                    conflict.resolution,
+                    SecretRedactor.sanitize_all(conflict.resolution) if conflict.resolution else None,
                     conflict.created_at,
                 ),
             )
