@@ -777,6 +777,31 @@
   <script>
     let globalState = null;
 
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let sessionToken = urlParams.get('token') || sessionStorage.getItem('defintra_token') || '';
+    if (sessionToken) {
+      sessionStorage.setItem('defintra_token', sessionToken);
+    }
+
+    async function apiFetch(url, options = {}) {
+      options.headers = options.headers || {};
+      if (sessionToken) {
+        options.headers['Authorization'] = `Bearer ${sessionToken}`;
+        options.headers['X-Defintra-Token'] = sessionToken;
+      }
+      return fetch(url, options);
+    }
+
     function showToast(msg) {
       const t = document.getElementById('toast');
       t.innerText = msg;
@@ -810,7 +835,7 @@
 
     async function loadState() {
       try {
-        const res = await fetch('/api/state');
+        const res = await apiFetch('/api/state');
         if (!res.ok) throw new Error('Failed to fetch state');
         globalState = await res.json();
 
@@ -846,8 +871,8 @@
         if (health.penalties && health.penalties.length > 0) {
           penList.innerHTML = health.penalties.map(p => `
             <div class="item-card" style="border-left: 3px solid var(--accent-amber);">
-              <div style="font-weight: 600; color: #fff;">${p.reason}</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Penalty Weight: -${p.penalty_weight} pts (${p.category})</div>
+              <div style="font-weight: 600; color: #fff;">${esc(p.reason)}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Penalty Weight: -${esc(p.penalty_weight)} pts (${esc(p.category)})</div>
             </div>
           `).join('');
         } else {
@@ -859,15 +884,15 @@
         reqsList.innerHTML = (globalState.requirements || []).map(r => `
           <div class="item-card">
             <div class="item-header">
-              <span style="font-weight: 700; color: #fff;">${r.id} — ${r.title}</span>
+              <span style="font-weight: 700; color: #fff;">${esc(r.id)} — ${esc(r.title)}</span>
               <div>
-                <span class="tag tag-pattern">${r.ears_pattern || 'UBIQUITOUS'}</span>
-                <span class="tag tag-state" style="margin-left: 0.3rem;">${r.priority || 'P1'}</span>
+                <span class="tag tag-pattern">${esc(r.ears_pattern || 'UBIQUITOUS')}</span>
+                <span class="tag tag-state" style="margin-left: 0.3rem;">${esc(r.priority || 'P1')}</span>
               </div>
             </div>
-            <div style="font-family: var(--font-mono); color: #38bdf8; font-size: 0.85rem; margin: 0.4rem 0;">${r.description}</div>
+            <div style="font-family: var(--font-mono); color: #38bdf8; font-size: 0.85rem; margin: 0.4rem 0;">${esc(r.description)}</div>
             <div style="font-size: 0.8rem; color: var(--text-muted);">
-              <strong>Acceptance Criteria:</strong> ${(r.acceptance_criteria || []).join('; ') || 'Standard verification'}
+              <strong>Acceptance Criteria:</strong> ${(r.acceptance_criteria || []).map(ac => esc(ac)).join('; ') || 'Standard verification'}
             </div>
           </div>
         `).join('') || '<div style="color: var(--text-muted);">No requirements found.</div>';
@@ -877,15 +902,15 @@
         decsList.innerHTML = (globalState.decisions || []).map(d => `
           <div class="item-card">
             <div class="item-header">
-              <span style="font-weight: 700; color: #fff;">${d.id} — ${d.title}</span>
-              <span class="tag tag-state">${d.status || 'APPROVED'}</span>
+              <span style="font-weight: 700; color: #fff;">${esc(d.id)} — ${esc(d.title)}</span>
+              <span class="tag tag-state">${esc(d.status || 'APPROVED')}</span>
             </div>
-            <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;"><strong>Decision:</strong> ${d.decision}</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted);"><strong>Rationale:</strong> ${d.rationale}</div>
+            <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;"><strong>Decision:</strong> ${esc(d.decision)}</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);"><strong>Rationale:</strong> ${esc(d.rationale || d.reason)}</div>
             ${d.preserved_disagreements?.length ? `
               <div style="margin-top: 0.5rem; font-size: 0.8rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px;">
                 <strong style="color: var(--accent-amber);">Preserved Disagreement / Rejected Alternatives:</strong>
-                ${d.preserved_disagreements.map(pd => `<div style="color: var(--text-muted); margin-top: 0.2rem;">• <em>${pd.alternative}:</em> ${pd.rejection_rationale}</div>`).join('')}
+                ${d.preserved_disagreements.map(pd => `<div style="color: var(--text-muted); margin-top: 0.2rem;">• <em>${esc(pd.alternative)}:</em> ${esc(pd.rejection_rationale || pd.reason_rejected)}</div>`).join('')}
               </div>
             ` : ''}
           </div>
@@ -896,17 +921,17 @@
         confList.innerHTML = (globalState.conflicts || []).map(cf => `
           <div class="item-card" style="border-left: 3px solid ${cf.resolved ? 'var(--accent-green)' : 'var(--accent-red)'};">
             <div class="item-header">
-              <span style="font-weight: 700; color: #fff;">${cf.id} — ${cf.title}</span>
+              <span style="font-weight: 700; color: #fff;">${esc(cf.id)} — ${esc(cf.title)}</span>
               <span class="tag ${cf.resolved ? 'tag-state' : 'tag-critical'}">${cf.resolved ? 'RESOLVED' : 'UNRESOLVED'}</span>
             </div>
-            <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${cf.description}</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">Conflicting entities: <code>${cf.node_a_id}</code> vs <code>${cf.node_b_id}</code></div>
+            <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${esc(cf.description)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Conflicting entities: <code>${esc(cf.node_a_id)}</code> vs <code>${esc(cf.node_b_id)}</code></div>
             ${!cf.resolved ? `
               <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-                <button class="btn btn-secondary" onclick="resolveConflict('${cf.id}', '${cf.node_a_id}')">Favor ${cf.node_a_id}</button>
-                <button class="btn btn-secondary" onclick="resolveConflict('${cf.id}', '${cf.node_b_id}')">Favor ${cf.node_b_id}</button>
+                <button class="btn btn-secondary" onclick="resolveConflict('${esc(cf.id)}', '${esc(cf.node_a_id)}')">Favor ${esc(cf.node_a_id)}</button>
+                <button class="btn btn-secondary" onclick="resolveConflict('${esc(cf.id)}', '${esc(cf.node_b_id)}')">Favor ${esc(cf.node_b_id)}</button>
               </div>
-            ` : `<div style="font-size: 0.8rem; color: var(--accent-green); margin-top: 0.3rem;">Resolution notes: ${cf.resolution_notes || 'Resolved'}</div>`}
+            ` : `<div style="font-size: 0.8rem; color: var(--accent-green); margin-top: 0.3rem;">Resolution notes: ${esc(cf.resolution_notes || 'Resolved')}</div>`}
           </div>
         `).join('') || '<div style="color: var(--accent-green);">✓ No architectural or requirement conflicts detected.</div>';
 
@@ -915,13 +940,13 @@
         unkList.innerHTML = (globalState.unknowns || []).map(u => `
           <div class="item-card" style="border-left: 3px solid var(--accent-amber);">
             <div class="item-header">
-              <span style="font-weight: 700; color: #fff;">${u.id} — ${u.question}</span>
-              <span class="tag tag-high">Entropy Cost: ${u.entropy_cost}</span>
+              <span style="font-weight: 700; color: #fff;">${esc(u.id)} — ${esc(u.question)}</span>
+              <span class="tag tag-high">Entropy Cost: ${esc(u.entropy_cost)}</span>
             </div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">Category: ${u.category}</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">Category: ${esc(u.category)}</div>
             <div style="display: flex; gap: 0.5rem;">
-              <input id="ans_${u.id}" class="input-field" placeholder="Type your answer to resolve this unknown...">
-              <button class="btn" onclick="submitAnswer('${u.id}')">Submit Answer</button>
+              <input id="ans_${esc(u.id)}" class="input-field" placeholder="Type your answer to resolve this unknown...">
+              <button class="btn" onclick="submitAnswer('${esc(u.id)}')">Submit Answer</button>
             </div>
           </div>
         `).join('') || '<div style="color: var(--accent-green);">✓ All unknowns resolved. Graph ambiguity is zero.</div>';
@@ -938,7 +963,7 @@
         return;
       }
       try {
-        const res = await fetch('/api/answer', {
+        const res = await apiFetch('/api/answer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ unknown_id: unkId, answer: inp.value.trim() })
@@ -954,7 +979,7 @@
 
     async function resolveConflict(cid, winnerId) {
       try {
-        const res = await fetch('/api/conflicts/resolve', {
+        const res = await apiFetch('/api/conflicts/resolve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ conflict_id: cid, winner_id: winnerId, notes: `Resolved in UI favoring ${winnerId}` })
@@ -974,7 +999,7 @@
       const target = document.getElementById('compileTarget').value;
       
       try {
-        const res = await fetch('/api/compile', {
+        const res = await apiFetch('/api/compile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ task, role, target })
@@ -996,7 +1021,7 @@
     async function loadTestPack(type) {
       document.getElementById('testPackTitle').innerText = `${type.toUpperCase()} Test Pack`;
       try {
-        const res = await fetch(`/api/test-pack?type=${type}`);
+        const res = await apiFetch(`/api/test-pack?type=${encodeURIComponent(type)}`);
         const data = await res.json();
         document.getElementById('testPackOutput').innerText = data.content;
       } catch (err) {
@@ -1014,7 +1039,7 @@
       const errorText = document.getElementById('incidentInput').value;
       if (!errorText.trim()) return;
       try {
-        const res = await fetch('/api/incident', {
+        const res = await apiFetch('/api/incident', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ error_text: errorText })
@@ -1030,7 +1055,7 @@
     async function loadRunbook(type) {
       document.getElementById('runbookTitle').innerText = `${type.replace('_', ' ').toUpperCase()} Runbook`;
       try {
-        const res = await fetch(`/api/runbook?type=${type}`);
+        const res = await apiFetch(`/api/runbook?type=${encodeURIComponent(type)}`);
         const data = await res.json();
         document.getElementById('runbookOutput').innerText = data.content;
       } catch (err) {
@@ -1046,7 +1071,7 @@
 
     async function loadStability() {
       try {
-        const res = await fetch('/api/stability');
+        const res = await apiFetch('/api/stability');
         const data = await res.json();
         document.getElementById('churnIndex').innerText = data.churn_index?.toFixed(2) || '0.00';
         document.getElementById('highChurnCount').innerText = data.high_churn_nodes?.length || 0;
@@ -1064,8 +1089,8 @@
         if (data.mutation_counts && Object.keys(data.mutation_counts).length > 0) {
           list.innerHTML = Object.entries(data.mutation_counts).map(([k, v]) => `
             <div class="item-card" style="display: flex; justify-content: space-between;">
-              <span style="font-family: var(--font-mono); color: #fff;">${k}</span>
-              <span class="tag tag-state">${v} mutations</span>
+              <span style="font-family: var(--font-mono); color: #fff;">${esc(k)}</span>
+              <span class="tag tag-state">${esc(v)} mutations</span>
             </div>
           `).join('');
         } else {
@@ -1080,7 +1105,7 @@
       const nodeId = document.getElementById('blastNodeId').value.trim();
       if (!nodeId) return;
       try {
-        const res = await fetch('/api/blast-radius', {
+        const res = await apiFetch('/api/blast-radius', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ node_id: nodeId })
@@ -1097,7 +1122,7 @@
 
     async function loadStaleness() {
       try {
-        const res = await fetch('/api/staleness');
+        const res = await apiFetch('/api/staleness');
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('stalenessScore').innerText = data.system_staleness_score?.toFixed(2) || '0.00';
@@ -1109,12 +1134,12 @@
           list.innerHTML = data.stale_nodes.map(n => `
             <div class="item-card" style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <div style="font-weight: 700; color: #fff;">${n.node_id} (${n.node_type}) — ${n.title}</div>
+                <div style="font-weight: 700; color: #fff;">${esc(n.node_id)} (${esc(n.node_type)}) — ${esc(n.title)}</div>
                 <div style="font-size: 0.8rem; color: var(--accent-amber); margin-top: 0.2rem;">
-                  Decayed: ${n.decayed_confidence} (from ${n.original_confidence}) | ${n.staleness_reason}
+                  Decayed: ${esc(n.decayed_confidence)} (from ${esc(n.original_confidence)}) | ${esc(n.staleness_reason)}
                 </div>
               </div>
-              <button class="btn btn-secondary" onclick="revalidateNode('${n.node_id}')">Re-validate</button>
+              <button class="btn btn-secondary" onclick="revalidateNode('${esc(n.node_id)}')">Re-validate</button>
             </div>
           `).join('');
         } else {
@@ -1127,7 +1152,7 @@
 
     async function revalidateNode(nodeId) {
       try {
-        const res = await fetch('/api/staleness/revalidate', {
+        const res = await apiFetch('/api/staleness/revalidate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ node_id: nodeId })
@@ -1142,7 +1167,7 @@
 
     async function loadImprovements() {
       try {
-        const res = await fetch('/api/improvements');
+        const res = await apiFetch('/api/improvements');
         if (!res.ok) return;
         const data = await res.json();
         const list = document.getElementById('improvementsList');
@@ -1150,16 +1175,16 @@
           list.innerHTML = data.suggestions.map(s => `
             <div class="item-card" style="border-left: 3px solid var(--accent-cyan); margin-bottom: 1rem;">
               <div class="item-header">
-                <span style="font-weight: 700; color: #fff; font-size: 1rem;">${s.id}: ${s.title}</span>
-                <span class="tag tag-state">ROI: ${s.roi_score}/10</span>
+                <span style="font-weight: 700; color: #fff; font-size: 1rem;">${esc(s.id)}: ${esc(s.title)}</span>
+                <span class="tag tag-state">ROI: ${esc(s.roi_score)}/10</span>
               </div>
-              <div style="color: #fff; font-size: 0.88rem; margin: 0.4rem 0;">${s.expected_benefit}</div>
+              <div style="color: #fff; font-size: 0.88rem; margin: 0.4rem 0;">${esc(s.expected_benefit)}</div>
               <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
-                <strong>Category:</strong> ${s.category} | <strong>Risk:</strong> ${s.change_risk} | <strong>Effort:</strong> ${s.estimated_effort}
+                <strong>Category:</strong> ${esc(s.category)} | <strong>Risk:</strong> ${esc(s.change_risk)} | <strong>Effort:</strong> ${esc(s.estimated_effort)}
               </div>
               <div style="background: rgba(0,0,0,0.3); padding: 0.6rem; border-radius: 4px;">
                 <strong style="font-size: 0.8rem; color: var(--accent-cyan);">Action Steps:</strong>
-                ${s.action_plan.map(step => `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">• ${step}</div>`).join('')}
+                ${(s.action_plan || []).map(step => `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">• ${esc(step)}</div>`).join('')}
               </div>
             </div>
           `).join('');
@@ -1173,7 +1198,7 @@
 
     async function loadRecovery() {
       try {
-        const res = await fetch('/api/recovery');
+        const res = await apiFetch('/api/recovery');
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('recoveryHealthStatus').innerText = data.system_health_status || 'HEALTHY';
@@ -1184,14 +1209,14 @@
           list.innerHTML = data.diagnoses.map(d => `
             <div class="item-card" style="border-left: 3px solid ${d.severity === 'CRITICAL' ? 'var(--accent-red)' : 'var(--accent-amber)'};">
               <div class="item-header">
-                <span style="font-weight: 700; color: #fff;">${d.failure_id} — ${d.title}</span>
-                <span class="tag ${d.severity === 'CRITICAL' ? 'tag-critical' : 'tag-state'}">${d.severity}</span>
+                <span style="font-weight: 700; color: #fff;">${esc(d.failure_id)} — ${esc(d.title)}</span>
+                <span class="tag ${d.severity === 'CRITICAL' ? 'tag-critical' : 'tag-state'}">${esc(d.severity)}</span>
               </div>
-              <div style="font-size: 0.88rem; color: #fff; margin: 0.3rem 0;">${d.impact_summary}</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Root Cause: ${d.root_cause_nodes.join(', ')}</div>
+              <div style="font-size: 0.88rem; color: #fff; margin: 0.3rem 0;">${esc(d.impact_summary)}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Root Cause: ${(d.root_cause_nodes || []).map(rn => esc(rn)).join(', ')}</div>
               <div style="margin-top: 0.5rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px;">
                 <strong style="color: var(--accent-amber); font-size: 0.8rem;">Recovery Steps:</strong>
-                ${d.remediation_steps.map(st => `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">→ ${st}</div>`).join('')}
+                ${(d.remediation_steps || []).map(st => `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">→ ${esc(st)}</div>`).join('')}
               </div>
             </div>
           `).join('');
@@ -1205,7 +1230,7 @@
 
     async function loadPolicies() {
       try {
-        const res = await fetch('/api/policies');
+        const res = await apiFetch('/api/policies');
         if (!res.ok) return;
         const data = await res.json();
         const list = document.getElementById('policiesList');
@@ -1216,12 +1241,12 @@
             return `
               <div class="item-card" style="border-left: 3px solid ${color}; margin-bottom: 0.75rem;">
                 <div class="item-header">
-                  <span style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 1rem;">${p.action_type}</span>
-                  <span class="tag ${tagClass}">${p.decision}</span>
+                  <span style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 1rem;">${esc(p.action_type)}</span>
+                  <span class="tag ${tagClass}">${esc(p.decision)}</span>
                 </div>
-                <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${p.description}</div>
+                <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${esc(p.description)}</div>
                 <div style="font-size: 0.8rem; color: var(--text-muted);">
-                  <strong>Risk Tier:</strong> ${p.risk_level} | <strong>Required Approval:</strong> ${p.required_approval}
+                  <strong>Risk Tier:</strong> ${esc(p.risk_level)} | <strong>Required Approval:</strong> ${esc(p.required_approval)}
                 </div>
               </div>
             `;
@@ -1236,7 +1261,7 @@
 
     async function loadEvents() {
       try {
-        const res = await fetch('/api/events');
+        const res = await apiFetch('/api/events');
         if (!res.ok) return;
         const data = await res.json();
         const list = document.getElementById('eventsList');
@@ -1244,15 +1269,15 @@
           list.innerHTML = data.events.map(e => `
             <div class="item-card" style="border-left: 3px solid var(--accent-cyan); margin-bottom: 0.75rem;">
               <div class="item-header">
-                <span style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 0.95rem;">${e.event_type}</span>
-                <span class="tag tag-pattern">${e.actor_role}</span>
+                <span style="font-weight: 700; color: #fff; font-family: var(--font-mono); font-size: 0.95rem;">${esc(e.event_type)}</span>
+                <span class="tag tag-pattern">${esc(e.actor_role)}</span>
               </div>
-              <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${e.summary}</div>
+              <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;">${esc(e.summary)}</div>
               <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.4rem;">
-                ${e.created_at} | Event ID: ${e.id}
+                ${esc(e.created_at)} | Event ID: ${esc(e.id)}
               </div>
               ${e.data?.execution_output_snippet ? `
-                <pre class="code-block" style="max-height: 120px; font-size: 0.78rem;">${e.data.execution_output_snippet}</pre>
+                <pre class="code-block" style="max-height: 120px; font-size: 0.78rem;">${esc(e.data.execution_output_snippet)}</pre>
               ` : ''}
             </div>
           `).join('');
@@ -1266,7 +1291,7 @@
 
     async function loadBenchmarks() {
       try {
-        const res = await fetch('/api/benchmarks');
+        const res = await apiFetch('/api/benchmarks');
         if (!res.ok) return;
         const data = await res.json();
         const list = document.getElementById('benchmarksList');
@@ -1274,15 +1299,15 @@
           list.innerHTML = data.benchmarks.map(b => `
             <div class="item-card" style="border-left: 3px solid var(--accent-green); margin-bottom: 0.75rem;">
               <div class="item-header">
-                <span style="font-weight: 700; color: #fff; font-family: var(--font-mono);">${b.id}</span>
-                <span class="tag tag-state">Health: ${b.defintra_health_score}%</span>
+                <span style="font-weight: 700; color: #fff; font-family: var(--font-mono);">${esc(b.id)}</span>
+                <span class="tag tag-state">Health: ${esc(b.defintra_health_score)}%</span>
               </div>
-              <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;"><strong>Input:</strong> ${b.input_summary}</div>
+              <div style="font-size: 0.9rem; color: #fff; margin: 0.3rem 0;"><strong>Input:</strong> ${esc(b.input_summary)}</div>
               <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.4rem;">
-                <strong>Defintra:</strong> ${b.defintra_req_count} reqs (${b.defintra_token_count} tokens, ${b.defintra_duration_ms}ms) vs <strong>Naive:</strong> ${b.naive_req_count} reqs (${b.naive_token_count} tokens, ${b.naive_duration_ms}ms)
+                <strong>Defintra:</strong> ${esc(b.defintra_req_count)} reqs (${esc(b.defintra_token_count)} tokens, ${esc(b.defintra_duration_ms)}ms) vs <strong>Naive:</strong> ${esc(b.naive_req_count)} reqs (${esc(b.naive_token_count)} tokens, ${esc(b.naive_duration_ms)}ms)
               </div>
               <div style="font-size: 0.8rem; color: var(--accent-cyan); background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 4px;">
-                ${b.comparison_summary}
+                ${esc(b.comparison_summary)}
               </div>
             </div>
           `).join('');
@@ -1301,7 +1326,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       try {
-        const res = await fetch('/api/graph');
+        const res = await apiFetch('/api/graph');
         const data = await res.json();
         const nodes = data.nodes || [];
         const edges = data.edges || [];

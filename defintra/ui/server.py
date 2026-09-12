@@ -1,14 +1,16 @@
 """
+
 Defintra Embedded Web Dashboard Server (§5, §7, §21, §22).
 Serves the rich dark-mode Defintra Control Center and provides JSON REST API.
 """
 
 import json
+import secrets
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
 from defintra.core.conflicts.engine import ConflictEngine
@@ -24,34 +26,60 @@ from defintra.core.team.coordinator import TeamCoordinator
 
 class DefintraAPIHandler(BaseHTTPRequestHandler):
     db_path: str = ".defintra/project.db"
+    auth_token: Optional[str] = None
 
     def _get_db(self) -> Database:
         return Database(self.db_path)
+
+    def _check_auth(self) -> bool:
+        if self.auth_token is None:
+            return False
+        # 1. Check Authorization header: Bearer <token>
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+            if secrets.compare_digest(token, self.auth_token):
+                return True
+        # 2. Check X-Defintra-Token header
+        custom_header = self.headers.get("X-Defintra-Token", "").strip()
+        if custom_header and secrets.compare_digest(custom_header, self.auth_token):
+            return True
+        # 3. Check query param ?token=
+        parsed = urllib.parse.urlparse(self.path)
+        query = urllib.parse.parse_qs(parsed.query)
+        q_token = query.get("token", [""])[0]
+        if q_token and secrets.compare_digest(q_token, self.auth_token):
+            return True
+        return False
 
     def _send_json(self, data: Any, status: int = 200):
         body = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_html(self, html_content: str):
+    def _send_html(self, html_content: str, status: int = 200):
         body = html_content.encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';",
+        )
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        if not self._check_auth():
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Unauthorized: Valid session token required"}')
+            return
+        self.send_response(204)
         self.end_headers()
 
     def do_GET(self):
@@ -59,11 +87,25 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if path == "/" or path == "/index.html":
+            if not self._check_auth():
+                unauth_html = (
+                    "<!DOCTYPE html><html><head><title>401 Unauthorized - Defintra</title>"
+                    "<style>body{background:#0b0f19;color:#f3f4f6;font-family:sans-serif;text-align:center;padding:80px;}"
+                    "code{color:#38bdf8;background:rgba(255,255,255,0.08);padding:3px 8px;border-radius:4px;}</style></head>"
+                    "<body><h2>401 Unauthorized</h2><p>Valid session token required. Run <code>defintra ui</code> in your terminal and use the authenticated link.</p></body></html>"
+                )
+                self._send_html(unauth_html, status=401)
+                return
+
             html_file = Path(__file__).parent / "dashboard.html"
             if html_file.exists():
                 self._send_html(html_file.read_text(encoding="utf-8"))
             else:
                 self._send_html("<h1>Defintra Dashboard Loading...</h1>")
+            return
+
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
             return
 
         db = self._get_db()
@@ -214,6 +256,10 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
     def do_POST(self):
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
+            return
+
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         length = int(self.headers.get("Content-Length", 0))
@@ -287,9 +333,22 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         elif path == "/api/scan":
             scan_path = payload.get("path", ".")
             proj_name = payload.get("name", "Scanned Project")
+
+            target_path = Path(scan_path).resolve()
+            workspace_root = Path(".").resolve()
+            try:
+                target_path.relative_to(workspace_root)
+            except ValueError:
+                self._send_json({"error": "Path traversal rejected: target path must be within workspace root"}, 400)
+                return
+
+            if not target_path.exists() or not target_path.is_dir():
+                self._send_json({"error": f"Target path '{scan_path}' is not an existing directory"}, 400)
+                return
+
             from defintra.core.brownfield.scanner import BrownfieldScanner
             scanner = BrownfieldScanner(db)
-            report = scanner.scan_repository(scan_path, project_name=proj_name)
+            report = scanner.scan_repository(str(target_path), project_name=proj_name)
             self._send_json(report.to_dict())
 
         elif path == "/api/sandbox/create":
@@ -313,11 +372,19 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         pass  # Suppress noisy HTTP stdout logs
 
 
-def start_ui_server(port: int = 8765, db_path: str = ".defintra/project.db", open_browser: bool = True):
+def start_ui_server(
+    port: int = 8765,
+    db_path: str = ".defintra/project.db",
+    open_browser: bool = True,
+    auth_token: Optional[str] = None,
+):
+    token = auth_token or secrets.token_urlsafe(24)
     DefintraAPIHandler.db_path = db_path
+    DefintraAPIHandler.auth_token = token
     server = ThreadingHTTPServer(("127.0.0.1", port), DefintraAPIHandler)
-    url = f"http://127.0.0.1:{port}"
+    url = f"http://127.0.0.1:{port}/?token={token}"
     print(f"Defintra Control Center running at: {url}")
+    print(f"Session Token: {token}")
     if open_browser:
         try:
             webbrowser.open(url)

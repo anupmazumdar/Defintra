@@ -5,6 +5,7 @@ Supports OpenAI, Gemini, Anthropic, and local zero-dependency Heuristic Mock Pro
 
 import json
 import os
+import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -114,8 +115,12 @@ class OpenAILLMProvider(BaseLLMProvider):
                     content = data["choices"][0]["message"]["content"]
                     parsed = json.loads(content)
                     return LLMResponse(content=content, raw_json=parsed)
-        except Exception:
-            pass
+                else:
+                    sys.stderr.write(
+                        f"[Defintra Warning] OpenAI API request failed with status {res.status_code}: {res.text}\n"
+                    )
+        except Exception as exc:
+            sys.stderr.write(f"[Defintra Warning] OpenAI provider exception ({type(exc).__name__}): {exc}\n")
 
         return MockHeuristicLLMProvider().generate(prompt, system_prompt)
 
@@ -129,21 +134,29 @@ class GeminiLLMProvider(BaseLLMProvider):
         if not self.api_key:
             return MockHeuristicLLMProvider().generate(prompt, system_prompt)
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
         body = {
             "contents": [{"parts": [{"text": (system_prompt + "\n\n" if system_prompt else "") + prompt}]}],
             "generationConfig": {"responseMimeType": "application/json"},
         }
         try:
             with httpx.Client(timeout=30.0) as client:
-                res = client.post(url, json=body)
+                res = client.post(url, headers=headers, json=body)
                 if res.status_code == 200:
                     data = res.json()
                     text = data["candidates"][0]["content"]["parts"][0]["text"]
                     parsed = json.loads(text)
                     return LLMResponse(content=text, raw_json=parsed)
-        except Exception:
-            pass
+                else:
+                    sys.stderr.write(
+                        f"[Defintra Warning] Gemini API request failed with status {res.status_code}: {res.text}\n"
+                    )
+        except Exception as exc:
+            sys.stderr.write(f"[Defintra Warning] Gemini provider exception ({type(exc).__name__}): {exc}\n")
 
         return MockHeuristicLLMProvider().generate(prompt, system_prompt)
 
@@ -184,8 +197,12 @@ class AnthropicLLMProvider(BaseLLMProvider):
                         json_str = text.split("```")[1].split("```")[0].strip()
                     parsed = json.loads(json_str)
                     return LLMResponse(content=text, raw_json=parsed)
-        except Exception:
-            pass
+                else:
+                    sys.stderr.write(
+                        f"[Defintra Warning] Anthropic API request failed with status {res.status_code}: {res.text}\n"
+                    )
+        except Exception as exc:
+            sys.stderr.write(f"[Defintra Warning] Anthropic provider exception ({type(exc).__name__}): {exc}\n")
 
         return MockHeuristicLLMProvider().generate(prompt, system_prompt)
 

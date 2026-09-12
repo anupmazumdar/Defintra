@@ -5,6 +5,9 @@ snapshot hashes, and pre-production governance gates.
 """
 
 import hashlib
+import os
+import shutil
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -22,10 +25,11 @@ class SandboxState:
         branch_name: str,
         isolation_type: str,  # "git_branch", "worktree", "directory"
         snapshot_hash: str,
-        status: str,  # "ACTIVE", "TESTING", "MERGED", "ROLLED_BACK"
+        status: str,  # "ACTIVE", "TESTING", "MERGED", "ROLLED_BACK", "CLEANED"
         created_at: str,
         allowed_actions: Optional[list[str]] = None,
         denied_actions: Optional[list[str]] = None,
+        worktree_path: Optional[str] = None,
     ):
         self.sandbox_id = sandbox_id
         self.project_id = project_id
@@ -36,6 +40,7 @@ class SandboxState:
         self.created_at = created_at
         self.allowed_actions = allowed_actions or []
         self.denied_actions = denied_actions or []
+        self.worktree_path = worktree_path
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -48,13 +53,14 @@ class SandboxState:
             "created_at": self.created_at,
             "allowed_actions": self.allowed_actions,
             "denied_actions": self.denied_actions,
+            "worktree_path": self.worktree_path,
         }
 
 
 class SandboxManager:
     def __init__(self, db: Database, base_dir: str = ".defintra/sandboxes"):
         self.db = db
-        self.base_dir = Path(base_dir)
+        self.base_dir = Path(base_dir).resolve()
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.policy_engine = PolicyEngine(db)
 
@@ -67,6 +73,7 @@ class SandboxManager:
         """
         Initializes an isolated staging sandbox for autonomous or human execution (§25, §45).
         Tags sandbox with capability-scoped allowed and denied actions derived from the policy engine.
+        Creates isolated filesystem worktree/directory when requested.
         """
         sandbox_id = f"sbx_{uuid.uuid4().hex[:8]}"
         branch_name = f"defintra/{project_id}/{task_id}"
@@ -81,6 +88,25 @@ class SandboxManager:
         allowed_actions = [p.action_type for p in policies if p.decision.value != "DENY"]
         denied_actions = [p.action_type for p in policies if p.decision.value == "DENY"]
 
+        worktree_path: Optional[str] = None
+        if isolation_type in ("worktree", "directory"):
+            sandbox_path = (self.base_dir / sandbox_id).resolve()
+            if isolation_type == "worktree":
+                try:
+                    res = subprocess.run(
+                        ["git", "worktree", "add", "-b", branch_name, str(sandbox_path)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if res.returncode != 0:
+                        sandbox_path.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    sandbox_path.mkdir(parents=True, exist_ok=True)
+            else:
+                sandbox_path.mkdir(parents=True, exist_ok=True)
+            worktree_path = str(sandbox_path)
+
         sandbox = SandboxState(
             sandbox_id=sandbox_id,
             project_id=project_id,
@@ -91,9 +117,42 @@ class SandboxManager:
             created_at=current_utc_time(),
             allowed_actions=allowed_actions,
             denied_actions=denied_actions,
+            worktree_path=worktree_path,
         )
 
         return sandbox
+
+    def cleanup_sandbox(self, sandbox: SandboxState) -> bool:
+        """
+        Safely removes an isolated worktree or staging directory upon completion or rollback.
+        """
+        if not sandbox.worktree_path:
+            sandbox.status = "CLEANED"
+            return True
+
+        wt_path = Path(sandbox.worktree_path)
+        if wt_path.exists():
+            if sandbox.isolation_type == "worktree":
+                try:
+                    subprocess.run(
+                        ["git", "worktree", "remove", "--force", str(wt_path)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    subprocess.run(
+                        ["git", "branch", "-D", sandbox.branch_name],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                except Exception:
+                    pass
+            if wt_path.exists():
+                shutil.rmtree(wt_path, ignore_errors=True)
+
+        sandbox.status = "CLEANED"
+        return True
 
     def evaluate_sandbox_action(
         self,
@@ -114,9 +173,27 @@ class SandboxManager:
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Enforces policy boundaries on actions executed inside the sandbox (§25, §45).
-        Refuses execution on DENY or unapproved REQUIRES_APPROVAL actions.
+        Enforces policy boundaries and filesystem sandbox confinement on actions executed inside the sandbox (§25, §45).
+        Refuses execution on DENY, unapproved REQUIRES_APPROVAL actions, or out-of-bounds file access.
         """
+        if sandbox.worktree_path and context:
+            target_path_str = context.get("file") or context.get("path") or context.get("file_path")
+            if target_path_str:
+                wt_root = Path(sandbox.worktree_path).resolve()
+                try:
+                    target_abs = Path(target_path_str).resolve()
+                    target_abs.relative_to(wt_root)
+                except ValueError:
+                    return {
+                        "sandbox_id": sandbox.sandbox_id,
+                        "action_type": action_type,
+                        "allowed": False,
+                        "status": "BLOCKED",
+                        "decision": "DENY",
+                        "risk_level": "CRITICAL",
+                        "reason": f"Path escape violation: '{target_path_str}' is outside sandbox worktree '{sandbox.worktree_path}'",
+                    }
+
         allowed, reason, decision = self.policy_engine.enforce_action(
             project_id=sandbox.project_id,
             action_type=action_type,

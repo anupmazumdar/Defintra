@@ -1449,32 +1449,50 @@ def benchmark_history(
 def launch_ui(
     port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically"),
+    token: Optional[str] = typer.Option(None, "--token", help="Optional session token for authentication"),
 ):
     """
     Launch the interactive Defintra Control Center & Web Dashboard in your browser (§5, §7, §21).
     """
+    import secrets
+    auth_token = token or secrets.token_urlsafe(24)
+    auth_url = f"http://127.0.0.1:{port}/?token={auth_token}"
     console.print(
         Panel.fit(
             f"[bold cyan]Defintra Control Center[/bold cyan]\n"
-            f"[green]Dashboard URL:[/green] [link=http://127.0.0.1:{port}]http://127.0.0.1:{port}[/link]\n"
+            f"[green]Authenticated URL:[/green] [link={auth_url}]{auth_url}[/link]\n"
+            f"[cyan]Session Token:[/cyan] [bold]{auth_token}[/bold]\n"
             f"[dim]Press Ctrl+C to stop the dashboard server.[/dim]",
             title="Web Control Center",
             border_style="cyan",
         )
     )
-    start_ui_server(port=port, open_browser=not no_browser)
+    start_ui_server(port=port, open_browser=not no_browser, auth_token=auth_token)
 
 
 @app.command(name="dashboard")
 def launch_dashboard(
     port: int = typer.Option(8765, "--port", "-p", help="Port to run web dashboard on"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Do not open browser automatically"),
+    token: Optional[str] = typer.Option(None, "--token", help="Optional session token for authentication"),
 ):
     """
     Alias for `defintra ui`.
     """
-    launch_ui(port=port, no_browser=no_browser)
+    launch_ui(port=port, no_browser=no_browser, token=token)
+
+
+@app.command(name="mcp")
+def run_mcp_server(
+    db_path: str = typer.Option(".defintra/project.db", "--db", help="Path to Defintra SQLite database"),
+):
+    """
+    Launch the Defintra Model Context Protocol (MCP) server over stdio (§44).
+    """
+    from defintra.mcp.server import handle_stdio_rpc
+    handle_stdio_rpc()
 
 
 if __name__ == "__main__":
     app()
+

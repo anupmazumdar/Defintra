@@ -34,3 +34,10 @@ htmlcov/
 # Local databases & runtime artifacts
 *.db
 .defintra/
+.defintra/export/
+
+# Agent & IDE workspace context files
+.cursorrules
+CLAUDE.md
+AGENTS.md
+

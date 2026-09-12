@@ -48,3 +48,44 @@ def test_sandbox_manager(test_db, tmp_path):
     gate = mgr.validate_governance_gate(project.id, sbx, test_results_pass=True, security_sign_off=True)
     assert gate["governance_status"] == "APPROVED"
     assert gate["ready_for_merge"] is True
+
+
+def test_sandbox_worktree_isolation_and_confinement(test_db, tmp_path):
+    from pathlib import Path
+    engine = DiscoveryEngine(test_db)
+    project = engine.run_fast_path("Sandbox Worktree Demo", "Build microservice architecture")
+
+    sbx_dir = tmp_path / "sandboxes"
+    mgr = SandboxManager(test_db, base_dir=str(sbx_dir))
+
+    # 1. Create worktree sandbox
+    sbx = mgr.create_sandbox(project.id, task_id="feature_branch", isolation_type="worktree")
+    assert sbx.worktree_path is not None
+    assert Path(sbx.worktree_path).exists()
+
+    # 2. Block action attempting path escape
+    escaped_action = mgr.execute_sandbox_action(
+        sbx,
+        action_type="write_code",
+        context={"path": str(tmp_path / "outside_sandbox.py")},
+    )
+    assert escaped_action["allowed"] is False
+    assert escaped_action["status"] == "BLOCKED"
+    assert "Path escape violation" in escaped_action["reason"]
+
+    # 3. Allow action inside worktree path
+    inside_path = Path(sbx.worktree_path) / "app.py"
+    allowed_action = mgr.execute_sandbox_action(
+        sbx,
+        action_type="read_repository",
+        context={"path": str(inside_path)},
+    )
+    assert allowed_action["allowed"] is True
+    assert allowed_action["status"] == "EXECUTED"
+
+    # 4. Clean up sandbox
+    cleaned = mgr.cleanup_sandbox(sbx)
+    assert cleaned is True
+    assert sbx.status == "CLEANED"
+    assert not Path(sbx.worktree_path).exists()
+
