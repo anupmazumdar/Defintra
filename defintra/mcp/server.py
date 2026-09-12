@@ -8,9 +8,11 @@ as Model Context Protocol (MCP) tools for AI assistants.
 
 import json
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from defintra.context.compiler import AgentRole, ContextCompiler, TargetFormat
+from defintra.core.security.redactor import SecretRedactor
 from defintra.core.brownfield.scanner import BrownfieldScanner
 from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
@@ -95,11 +97,15 @@ class DefintraMCPServer:
         if not project:
             return {"error": "No project found"}
 
+        title = SecretRedactor.sanitize_all(title)
+        decision = SecretRedactor.sanitize_all(decision)
+        reason = SecretRedactor.sanitize_all(reason)
+
         alts = [
             RejectedAlternative(
-                alternative=a.get("alternative", ""),
-                reason_rejected=a.get("reason_rejected", ""),
-                proposed_by=a.get("proposed_by", "AI Assistant"),
+                alternative=SecretRedactor.sanitize_all(a.get("alternative", "")),
+                reason_rejected=SecretRedactor.sanitize_all(a.get("reason_rejected", "")),
+                proposed_by=SecretRedactor.sanitize_all(a.get("proposed_by", "AI Assistant")),
             )
             for a in rejected_alternatives
         ]
@@ -136,6 +142,7 @@ class DefintraMCPServer:
         """
         Minimum Sufficient Context Compiler (§21, §23).
         """
+        task_description = SecretRedactor.sanitize_all(task_description)
         try:
             agent_role = AgentRole[role.upper()]
         except KeyError:
@@ -158,7 +165,15 @@ class DefintraMCPServer:
         }
 
     def scan_repository(self, repo_path: str, name: Optional[str] = None) -> Dict[str, Any]:
-        report = self.scanner.scan_repository(repo_path, project_name=name)
+        target = Path(repo_path).resolve()
+        cwd = Path.cwd().resolve()
+        try:
+            target.relative_to(cwd)
+        except ValueError:
+            return {"error": f"Path traversal rejected: target repository path '{repo_path}' must be within current workspace"}
+        if not target.exists():
+            return {"error": f"Target repository path '{repo_path}' does not exist."}
+        report = self.scanner.scan_repository(str(target), project_name=name)
         return report.to_dict()
 
     def detect_conflicts(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -181,7 +196,7 @@ class DefintraMCPServer:
         resolved = self.conflict_engine.resolve_conflict(
             project_id=project.id,
             conflict_id=conflict_id,
-            resolution_notes=resolution_notes,
+            resolution_notes=SecretRedactor.sanitize_all(resolution_notes),
             winning_entity_id=winning_entity_id,
         )
         return resolved.model_dump()
@@ -209,13 +224,13 @@ class DefintraMCPServer:
         except KeyError:
             agent_role = AgentRole.SOFTWARE_ARCHITECT
 
-        return self.team_coordinator.dispatch_task(project.id, task, agent_role)
+        return self.team_coordinator.dispatch_task(project.id, SecretRedactor.sanitize_all(task), agent_role)
 
     def trace_incident(self, error_text: str, project_id: Optional[str] = None) -> Dict[str, Any]:
         project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
         if not project:
             return {"error": "No project found"}
-        rep = self.incident_tracer.trace_incident(error_text, project.id)
+        rep = self.incident_tracer.trace_incident(SecretRedactor.sanitize_all(error_text), project.id)
         return rep.to_dict()
 
     def generate_runbook(self, runbook_type: str = "backup", project_id: Optional[str] = None) -> Dict[str, Any]:

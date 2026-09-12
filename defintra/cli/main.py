@@ -1493,6 +1493,44 @@ def run_mcp_server(
     handle_stdio_rpc()
 
 
+@app.command(name="purge")
+def purge_data(
+    project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID to purge"),
+    all_projects: bool = typer.Option(False, "--all", "-a", help="Purge all project data and exports"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
+):
+    """
+    Purge project data from knowledge graph and workspace exports (right-to-erasure / privacy purge).
+    """
+    import shutil
+    db = get_db()
+
+    if not project_id and not all_projects:
+        console.print("[yellow]Please specify --project <id> or --all to purge data.[/yellow]")
+        raise typer.Exit(1)
+
+    if not force:
+        target = "ALL project records and exports" if all_projects else f"project '{project_id}'"
+        confirm = typer.confirm(f"Are you sure you want to permanently delete {target}?")
+        if not confirm:
+            console.print("[dim]Operation cancelled.[/dim]")
+            return
+
+    if all_projects:
+        count = db.purge_all()
+        export_dir = Path(".defintra/export")
+        if export_dir.exists():
+            shutil.rmtree(export_dir, ignore_errors=True)
+        console.print(f"[bold green]Successfully purged all projects ({count} deleted) and cleaned .defintra/export/.[/bold green]")
+    else:
+        project = db.get_project(project_id)
+        if not project:
+            console.print(f"[red]Project '{project_id}' not found.[/red]")
+            raise typer.Exit(1)
+        db.delete_project(project_id)
+        console.print(f"[bold green]Successfully purged project '{project_id}' and all cascaded knowledge graph entities.[/bold green]")
+
+
 if __name__ == "__main__":
     app()
 

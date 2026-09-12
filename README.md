@@ -433,25 +433,26 @@ Defintra manages the critical interface between architectural specifications and
 | :--- | :--- | :--- | :--- |
 | **Knowledge Graph** | `.defintra/project.db` | Local SQLite database storing entities, requirements, and ledger | ❌ Ignored (`.gitignore`) |
 | **Exported Specs** | `.defintra/export/` | DIR JSON schemas, markdown specs, and ADR files | ❌ Ignored (`.gitignore`) |
-| **Agent Rule Files** | `.cursorrules`, `CLAUDE.md`, `AGENTS.md` | Workspace root files generated via `defintra export --rules` | ⚠️ **TRACKED BY DEFAULT** |
+| **Agent Rule Files** | `.cursorrules`, `CLAUDE.md`, `AGENTS.md` | Workspace root files generated via `defintra export --rules` | ❌ Ignored (`.gitignore`) |
 
-### Plaintext Secrets & Lack of Ingestion Redaction
+### Automated Secret Detection & Ingestion Redaction
 
-> [!WARNING]
-> Defintra does not currently run automated secret detection or redaction on ingested text. If API keys, passwords, connection strings, or JWTs are included in PRDs, brownfield source code, or incident stack traces, they are persisted **in plaintext** inside `.defintra/project.db` and serialized into `.defintra/export/`. Furthermore, exporting rules to `.cursorrules` or `CLAUDE.md` can inadvertently leak credentials into your Git repository.
-
-Always manually sanitize input PRDs and stack traces prior to running `defintra analyze` or `defintra incident`.
+Defintra includes a built-in automated secret detection and redaction engine (`SecretRedactor`). When user intent, PRDs, brownfield source code, or incident stack traces are ingested:
+* **API Keys** (OpenAI `sk-...`, Anthropic `sk-ant-...`, GitHub tokens `ghp_...`, AWS access keys `AKIA...`) are automatically detected and replaced with `[REDACTED_SECRET:<TYPE>]`.
+* **Database Connection Strings** (`postgres://`, `mysql://`, `mongodb://`, `redis://`) containing credentials have sensitive passwords scrubbed.
+* **Private Keys** (`-----BEGIN ... PRIVATE KEY-----`) and **JWTs** / **Bearer tokens** are redacted before storage in SQLite or serialization into exports.
+* **Prompt Injection Delimiters** (e.g. `</defintra_context>`, `<|im_start|>`) are sanitized to prevent context escape.
 
 ### Right-to-Erasure & Data Purging
 
-Defintra stores all persistent state locally. To completely purge a project's data, knowledge graph, and exports (right-to-erasure):
+Defintra provides dedicated data purging commands to completely erase projects, cascade-delete knowledge graph entities, and remove exported files:
 
 ```bash
-# Delete all project state and local SQLite databases
-rm -rf .defintra/
+# Purge a specific project and all cascaded graph entities
+defintra purge --project <project_id> [--force]
 
-# Remove exported agent rule files from workspace root
-rm -f .cursorrules CLAUDE.md AGENTS.md
+# Purge all local projects, SQLite records, and export files
+defintra purge --all [--force]
 ```
 
 ---

@@ -28,6 +28,7 @@ from defintra.core.models.entities import (
     current_utc_time,
 )
 from defintra.core.requirements.ears import EARSEngine
+from defintra.core.security.redactor import SecretRedactor
 
 # Pre-seeded Domain Templates (§5)
 DOMAIN_TEMPLATES: Dict[str, Dict[str, Any]] = {
@@ -223,6 +224,7 @@ class DiscoveryEngine:
         identifies unknowns and assumptions, and logs silent assumptions.
         """
         project_id = re.sub(r"[^a-zA-Z0-9_-]", "_", project_name.lower().strip())
+        raw_input = SecretRedactor.sanitize_all(raw_input)
         domain_key = self.detect_domain(raw_input)
         template = DOMAIN_TEMPLATES.get(domain_key, DOMAIN_TEMPLATES["COLLEGE_STUDENT"])
 

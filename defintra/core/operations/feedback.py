@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 from defintra.core.db.database import Database
 from defintra.core.graph.engine import ProjectGraph
+from defintra.core.security.redactor import SecretRedactor
 
 
 class IncidentTraceReport:
@@ -47,6 +48,9 @@ class IncidentTracer:
         project = self.db.get_project(project_id)
         if not project:
             raise ValueError(f"Project '{project_id}' not found.")
+
+        # Sanitize sensitive credentials and prompt delimiters from stack trace
+        incident_text = SecretRedactor.sanitize_all(incident_text)
 
         reqs = self.db.get_requirements(project_id)
         asms = self.db.get_assumptions(project_id)

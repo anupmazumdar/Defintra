@@ -30,6 +30,7 @@ from defintra.core.models.entities import (
     RequirementPriority,
     Unknown,
 )
+from defintra.core.security.redactor import SecretRedactor
 
 
 class Database:
@@ -78,7 +79,7 @@ class Database:
                 (
                     project.id,
                     project.name,
-                    project.objective,
+                    SecretRedactor.redact(project.objective),
                     project.owner_id,
                     project.domain,
                     project.source_type,
@@ -126,6 +127,49 @@ class Database:
                 updated_at=row["updated_at"],
             )
 
+    def list_projects(self) -> List[Project]:
+        """
+        Lists all projects currently registered in the database.
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute("SELECT * FROM projects ORDER BY created_at DESC").fetchall()
+            projects = []
+            for row in rows:
+                projects.append(
+                    Project(
+                        id=row["id"],
+                        name=row["name"],
+                        objective=row["objective"],
+                        owner_id=row["owner_id"] if "owner_id" in row.keys() else None,
+                        domain=row["domain"],
+                        source_type=row["source_type"],
+                        spec_entropy=row["spec_entropy"],
+                        spec_health_score=row["spec_health_score"],
+                        created_at=row["created_at"],
+                        updated_at=row["updated_at"],
+                    )
+                )
+            return projects
+
+    def delete_project(self, project_id: str) -> bool:
+        """
+        Deletes a project and cascades across all requirements, decisions,
+        assumptions, unknowns, components, contracts, and edges.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def purge_all(self) -> int:
+        """
+        Purges all project data and cascaded entities from the SQLite database.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute("DELETE FROM projects")
+            conn.commit()
+            return cursor.rowcount
+
     # ==========================================
     # Requirement Operations
     # ==========================================
@@ -153,15 +197,15 @@ class Database:
                 (
                     req.id,
                     req.project_id,
-                    req.title,
-                    req.description,
+                    SecretRedactor.redact(req.title),
+                    SecretRedactor.redact(req.description),
                     req.ears_pattern.value,
                     req.priority.value,
                     req.status.value,
                     req.category,
                     json.dumps(req.affected_components),
-                    json.dumps(req.constraints),
-                    json.dumps(req.acceptance_criteria),
+                    json.dumps([SecretRedactor.redact(c) for c in req.constraints]),
+                    json.dumps([SecretRedactor.redact(a) for a in req.acceptance_criteria]),
                     req.provenance.model_dump_json(),
                     req.created_at,
                 ),
@@ -224,9 +268,9 @@ class Database:
                 (
                     dec.id,
                     dec.project_id,
-                    dec.title,
-                    dec.decision,
-                    dec.reason,
+                    SecretRedactor.redact(dec.title),
+                    SecretRedactor.redact(dec.decision),
+                    SecretRedactor.redact(dec.reason),
                     json.dumps(rejected_alts),
                     dec.status.value,
                     dec.approval_level.value,
@@ -287,7 +331,7 @@ class Database:
                 (
                     asm.id,
                     asm.project_id,
-                    asm.statement,
+                    SecretRedactor.redact(asm.statement),
                     asm.category,
                     asm.confidence,
                     asm.status,
@@ -336,11 +380,11 @@ class Database:
                 (
                     unk.id,
                     unk.project_id,
-                    unk.question,
+                    SecretRedactor.redact(unk.question),
                     unk.impact,
                     unk.category,
                     unk.status,
-                    unk.resolution,
+                    SecretRedactor.redact(unk.resolution) if unk.resolution else None,
                     unk.priority_order,
                     unk.created_at,
                 ),

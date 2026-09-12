@@ -60,6 +60,9 @@ def test_mcp_compile_context(mcp_server):
 
 
 def test_mcp_expanded_tools(mcp_server, tmp_path):
+    import shutil
+    from pathlib import Path
+
     # 1. Test conflicts
     confs = mcp_server.detect_conflicts()
     assert isinstance(confs, list)
@@ -68,9 +71,33 @@ def test_mcp_expanded_tools(mcp_server, tmp_path):
     pack = mcp_server.generate_test_pack(pack_type="human")
     assert "Human Testing Pack" in pack["content"]
 
-    # 3. Test scan repository
-    mock_sub = tmp_path / "mock_sub"
-    mock_sub.mkdir()
+    # 3. Test scan repository inside workspace
+    mock_sub = Path(".defintra/test_mcp_mock_sub").resolve()
+    mock_sub.mkdir(parents=True, exist_ok=True)
     (mock_sub / "test.py").write_text("print('hello')", encoding="utf-8")
-    scan_res = mcp_server.scan_repository(str(mock_sub), name="Sub Repo")
-    assert scan_res["files_scanned"] >= 1
+    try:
+        scan_res = mcp_server.scan_repository(str(mock_sub), name="Sub Repo")
+        assert scan_res["files_scanned"] >= 1
+    finally:
+        shutil.rmtree(mock_sub, ignore_errors=True)
+
+    # 4. Test path traversal rejected outside workspace
+    traversal_res = mcp_server.scan_repository(str(tmp_path), name="External Target")
+    assert "error" in traversal_res
+    assert "Path traversal rejected" in traversal_res["error"]
+
+    # 5. Test secret redaction on decision proposal
+    dec_res = mcp_server.propose_decision(
+        decision_id="D-SEC-01",
+        title="Payment API Key",
+        decision="Use Stripe key sk-proj-111222333444555666777",
+        reason="Admin access password: 'SecretAdminPassword123'",
+        rejected_alternatives=[],
+    )
+    assert dec_res["status"] == "PROPOSED"
+    assert "sk-proj-" not in dec_res["message"]
+    saved_dec = mcp_server.db.get_decisions(mcp_server.db.get_first_project().id)
+    sec_dec = [d for d in saved_dec if d.id == "D-SEC-01"][0]
+    assert "sk-proj-" not in sec_dec.decision
+    assert "[REDACTED_SECRET:" in sec_dec.decision
+
