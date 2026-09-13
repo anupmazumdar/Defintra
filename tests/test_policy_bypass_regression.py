@@ -7,12 +7,11 @@ Verifies that:
 4. Legitimate approved execute_shell commands execute safely with shell=False.
 """
 
-from pathlib import Path
 import pytest
 
 from defintra.core.db.database import Database
 from defintra.core.discovery.engine import DiscoveryEngine
-from defintra.core.sandbox.manager import SandboxManager, ALLOWED_SANDBOX_BINARIES
+from defintra.core.sandbox.manager import SandboxManager
 
 
 @pytest.fixture

@@ -19,7 +19,6 @@ from defintra.core.models.entities import (
 )
 from defintra.core.requirements.ears import EARSEngine
 
-
 ALLOWED_GEMINI_MODELS = {
     "gemini-1.5-flash",
     "gemini-1.5-flash-latest",

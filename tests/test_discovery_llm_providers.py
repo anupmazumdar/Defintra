@@ -1,8 +1,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 
 from defintra.core.discovery.llm import (
     AnthropicLLMProvider,

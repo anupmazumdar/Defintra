@@ -11,8 +11,8 @@ Verifies that:
 import pytest
 
 from defintra.core.db.database import Database
-from defintra.core.models.entities import ApprovalLevel, ChangeRisk, Project
-from defintra.core.policy.engine import PolicyDecisionType, PolicyEngine
+from defintra.core.models.entities import Project
+from defintra.core.policy.engine import PolicyEngine
 
 
 @pytest.fixture
