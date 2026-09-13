@@ -372,7 +372,13 @@ def test_cli_analyze_input_size_cap_and_force(monkeypatch):
 
 
 def test_cli_review_deep_path(monkeypatch):
-    from defintra.core.models.entities import ArtifactState, Provenance, Requirement, SourceType, Unknown
+    from defintra.core.models.entities import (
+        ArtifactState,
+        Provenance,
+        Requirement,
+        SourceType,
+        Unknown,
+    )
 
     tmpdir = tempfile.mkdtemp()
     try:
