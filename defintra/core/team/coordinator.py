@@ -5,6 +5,7 @@ role handoffs, and task-to-model routing.
 """
 
 import json
+import logging
 import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -153,7 +154,11 @@ class TeamCoordinator:
         Adaptive Execution Loop (§20):
         Primary Model -> Validate -> (On failure) Retry with Repair Prompt -> (On failure) Fallback Model.
         """
-        from defintra.core.discovery.llm import MockHeuristicLLMProvider, get_llm_provider
+        from defintra.core.discovery.llm import (
+            LLMProviderError,
+            MockHeuristicLLMProvider,
+            get_llm_provider,
+        )
 
         system_prompt = (
             f"You are the {role.value} on the Defintra autonomous engineering team. "
@@ -211,16 +216,27 @@ class TeamCoordinator:
                 summary=f"Falling back to secondary model {routing.fallback_model} for task '{task_title}'",
                 payload={"task": task_title, "fallback_model": routing.fallback_model, "reason": "Primary model failed validation"},
             )
-            fallback_provider = get_llm_provider(routing.fallback_model)
             try:
+                fallback_provider = get_llm_provider(routing.fallback_model)
                 resp = fallback_provider.generate(prompt=prompt, system_prompt=system_prompt)
                 output = resp.content or ""
+                valid, reason = self.validate_role_output(role, output)
+                attempts_log.append({"attempt": 3, "model": routing.fallback_model, "valid": valid, "reason": reason})
+                provider = fallback_provider
+                is_mock = isinstance(provider, MockHeuristicLLMProvider)
+            except LLMProviderError as exc:
+                fallback_msg = f"Fallback model unavailable: {exc.provider_name} API key not configured"
+                logging.getLogger("defintra.coordinator").warning(fallback_msg)
+                attempts_log.append({
+                    "attempt": 3,
+                    "model": routing.fallback_model,
+                    "valid": False,
+                    "reason": fallback_msg,
+                })
             except Exception:
                 output = ""
-            valid, reason = self.validate_role_output(role, output)
-            attempts_log.append({"attempt": 3, "model": routing.fallback_model, "valid": valid, "reason": reason})
-            provider = fallback_provider
-            is_mock = isinstance(provider, MockHeuristicLLMProvider)
+                valid, reason = self.validate_role_output(role, output)
+                attempts_log.append({"attempt": 3, "model": routing.fallback_model, "valid": valid, "reason": reason})
 
         # 4. Record Final Event
         final_event_type = StructuredEventType.TASK_COMPLETED if valid else StructuredEventType.TASK_FAILED
@@ -379,7 +395,7 @@ class TeamCoordinator:
                 "decisions_count": len(compiled.decisions),
                 "token_count": compiled.token_count,
             },
-            "status": "COMPLETED" if execute else "ROUTED",
+            "status": ("COMPLETED" if exec_res["valid"] else "FAILED") if execute else "ROUTED",
             "execution_output": execution_output,
             "provider": provider_name,
             "is_mock": is_mock,

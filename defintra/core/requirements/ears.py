@@ -194,6 +194,8 @@ class EARSEngine:
         constraints: Optional[List[str]] = None,
         acceptance_criteria: Optional[List[str]] = None,
         confidence: float = 0.9,
+        status: ArtifactState = ArtifactState.PROPOSED,
+        source_trust_level: str = "USER_TYPED",
     ) -> Requirement:
         ears_obj = EARSRequirement(
             system_name=system_name,
@@ -213,7 +215,7 @@ class EARSEngine:
             description=rendered_desc,
             ears_pattern=pattern,
             priority=priority,
-            status=ArtifactState.PROPOSED,
+            status=status,
             category=category,
             affected_components=affected_components or [],
             constraints=constraints or [],
@@ -221,5 +223,6 @@ class EARSEngine:
             provenance=Provenance(
                 source="EARS Requirement Generator",
                 confidence=confidence,
+                source_trust_level=source_trust_level,
             ),
         )

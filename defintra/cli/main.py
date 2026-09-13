@@ -26,6 +26,7 @@ from defintra.core.governance.recovery import FailureRecoveryEngine
 from defintra.core.governance.stability import StabilityBudgetEngine
 from defintra.core.governance.staleness import StalenessEngine
 from defintra.core.graph.engine import ProjectGraph
+from defintra.core.models.entities import ArtifactState, SourceType
 from defintra.core.operations.feedback import IncidentTracer
 from defintra.core.operations.improvements import PostDeploymentAdvisor
 from defintra.core.operations.runbooks import RunbookGenerator
@@ -79,6 +80,7 @@ def analyze(
     input_text: str = typer.Argument(..., help="Natural language idea prompt or path to a PRD text file"),
     project_name: Optional[str] = typer.Option(None, "--name", "-n", help="Project name"),
     deep: bool = typer.Option(False, "--deep", help="Run Deep Path recursive decomposition"),
+    force: bool = typer.Option(False, "--force", "-f", help="Proceed with full content even if it exceeds 50,000 characters"),
 ):
     """
     Analyze raw human intent, parse EARS requirements, seed decisions & unknowns, and calculate spec health.
@@ -91,16 +93,35 @@ def analyze(
     if p.exists() and p.is_file():
         raw_content = p.read_text(encoding="utf-8")
         p_name = project_name or p.stem
+        source_trust_level = "FILE_INGESTED"
     else:
         raw_content = input_text
         p_name = project_name or (raw_content.split(".")[0][:30] if raw_content else "New Project")
+        source_trust_level = "USER_TYPED"
 
     with console.status("[bold cyan]Extracting intent, decomposing requirements into EARS, checking unknowns..."):
         project = engine.run_fast_path(p_name, raw_content)
         if deep:
+            if len(raw_content) > 50000:
+                if not force:
+                    console.print(
+                        f"\n[bold yellow]Warning:[/bold yellow] Input exceeds 50,000 characters ({len(raw_content):,} chars). "
+                        "Truncating content for Deep Path analysis. Use [cyan]--force[/cyan] to analyze full content."
+                    )
+                    raw_content = raw_content[:50000] + "\n...[TRUNCATED: Exceeded 50,000 character limit]"
+                else:
+                    console.print(
+                        f"\n[bold yellow]Notice:[/bold yellow] Input exceeds 50,000 characters ({len(raw_content):,} chars). "
+                        "Proceeding with full content via [cyan]--force[/cyan]."
+                    )
             try:
                 deep_engine = DeepPathEngine()
-                deep_reqs, deep_unks = deep_engine.decompose(project.id, raw_content)
+                deep_reqs, deep_unks = deep_engine.decompose(
+                    project.id,
+                    raw_content,
+                    source_trust_level=source_trust_level,
+                    force=force,
+                )
                 for dr in deep_reqs:
                     db.save_requirement(dr)
                 for du in deep_unks:
@@ -142,6 +163,98 @@ def analyze(
     for r in reqs:
         table.add_row(r.id, r.ears_pattern.value, r.description, r.priority.value, r.status.value)
     console.print(table)
+
+
+@app.command(name="review-deep-path")
+def review_deep_path(
+    project_id: str = typer.Argument(..., help="Target project ID to review proposed deep path artifacts"),
+    reject: bool = typer.Option(False, "--reject", help="Reject proposed deep path items instead of approving"),
+):
+    """
+    Review and approve/reject proposed requirements and unknowns discovered via Deep Path file ingestion.
+    """
+    db = get_db()
+    project = db.get_project(project_id)
+    if not project:
+        console.print(f"[bold red]Error:[/bold red] Project '{project_id}' not found.")
+        raise typer.Exit(1)
+
+    reqs = db.get_requirements(project.id)
+    unks = db.get_unknowns(project.id)
+
+    pending_reqs = [
+        r
+        for r in reqs
+        if getattr(r.provenance, "source_trust_level", None) == "FILE_INGESTED"
+        and (r.provenance.source_type == SourceType.AI_INFERRED or str(r.provenance.source_type) == "AI_INFERRED")
+        and r.status == ArtifactState.PROPOSED
+    ]
+
+    pending_unks = [
+        u
+        for u in unks
+        if getattr(u.provenance, "source_trust_level", None) == "FILE_INGESTED"
+        and (u.provenance.source_type == SourceType.AI_INFERRED or str(u.provenance.source_type) == "AI_INFERRED")
+        and u.status == "PROPOSED"
+    ]
+
+    if not pending_reqs and not pending_unks:
+        console.print(f"[yellow]No pending deep-path items found for project '{project.name}' ({project.id}).[/yellow]")
+        return
+
+    console.print(
+        Panel(
+            f"[bold white]{project.name}[/bold white] ({project.id})\n"
+            f"[cyan]Pending Requirements:[/cyan] {len(pending_reqs)} | [cyan]Pending Unknowns:[/cyan] {len(pending_unks)}",
+            title="Deep Path Ingestion Review",
+            border_style="cyan",
+        )
+    )
+
+    if pending_reqs:
+        table = Table(title="Proposed Deep Path Requirements")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white")
+        table.add_column("Priority", style="yellow")
+        table.add_column("Status", style="magenta")
+        table.add_column("Action", style="green" if not reject else "red")
+        for r in pending_reqs:
+            action_str = "REJECTED" if reject else "APPROVED"
+            table.add_row(r.id, r.title, r.priority.value, r.status.value, action_str)
+        console.print(table)
+
+    if pending_unks:
+        table_u = Table(title="Proposed Deep Path Unknowns")
+        table_u.add_column("ID", style="cyan", no_wrap=True)
+        table_u.add_column("Question", style="white")
+        table_u.add_column("Impact", style="yellow")
+        table_u.add_column("Status", style="magenta")
+        table_u.add_column("Action", style="green" if not reject else "red")
+        for u in pending_unks:
+            action_str = "REJECTED" if reject else "OPEN"
+            table_u.add_row(u.id, u.question, u.impact, u.status, action_str)
+        console.print(table_u)
+
+    if reject:
+        for r in pending_reqs:
+            r.status = ArtifactState.DEPRECATED
+            db.save_requirement(r)
+        for u in pending_unks:
+            u.status = "REJECTED"
+            db.save_unknown(u)
+        console.print(
+            f"[red]Rejected {len(pending_reqs)} requirement(s) and {len(pending_unks)} unknown(s).[/red]"
+        )
+    else:
+        for r in pending_reqs:
+            r.status = ArtifactState.APPROVED
+            db.save_requirement(r)
+        for u in pending_unks:
+            u.status = "OPEN"
+            db.save_unknown(u)
+        console.print(
+            f"[bold green]Successfully approved {len(pending_reqs)} requirement(s) and {len(pending_unks)} unknown(s) into project knowledge graph.[/bold green]"
+        )
 
 
 @app.command()

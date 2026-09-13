@@ -343,4 +343,95 @@ def test_cli_analyze_deep_and_llm_provider_error(monkeypatch):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def test_cli_analyze_input_size_cap_and_force(monkeypatch):
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_file = os.path.join(tmpdir, "project.db")
+        monkeypatch.setattr(
+            "defintra.cli.main.get_db",
+            lambda: __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file),
+        )
+
+        large_text = "A" * 60000
+
+        # Without --force: should warn and truncate
+        res_no_force = runner.invoke(app, ["analyze", "--deep", large_text])
+        assert res_no_force.exit_code == 0
+        assert "Warning" in res_no_force.output
+        assert "exceeds 50,000 characters" in res_no_force.output
+
+        # With --force: should proceed with notice
+        res_force = runner.invoke(app, ["analyze", "--deep", "--force", large_text])
+        assert res_force.exit_code == 0
+        assert "Notice" in res_force.output
+        assert "Proceeding with full" in res_force.output
+        assert "--force" in res_force.output
+    finally:
+        gc.collect()
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_cli_review_deep_path(monkeypatch):
+    from defintra.core.models.entities import ArtifactState, Provenance, Requirement, SourceType, Unknown
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_file = os.path.join(tmpdir, "project.db")
+        db = __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file)
+        monkeypatch.setattr("defintra.cli.main.get_db", lambda: db)
+
+        # Initialize project
+        runner.invoke(app, ["init", "Review Project"])
+        proj = db.get_first_project()
+        assert proj is not None
+
+        # Seed proposed items from file ingestion
+        req = Requirement(
+            id=f"R-DEEP-001_{proj.id}",
+            project_id=proj.id,
+            title="File Ingested Requirement",
+            description="The system shall validate all file inputs",
+            status=ArtifactState.PROPOSED,
+            provenance=Provenance(
+                source_trust_level="FILE_INGESTED",
+                source_type=SourceType.AI_INFERRED,
+            ),
+        )
+        unk = Unknown(
+            id=f"UNK-DEEP-001_{proj.id}",
+            project_id=proj.id,
+            question="File Ingested Unknown Question?",
+            impact="HIGH",
+            category="SECURITY",
+            status="PROPOSED",
+            provenance=Provenance(
+                source_trust_level="FILE_INGESTED",
+                source_type=SourceType.AI_INFERRED,
+            ),
+        )
+        db.save_requirement(req)
+        db.save_unknown(unk)
+
+        # Execute review-deep-path command
+        res_review = runner.invoke(app, ["review-deep-path", proj.id])
+        assert res_review.exit_code == 0
+        assert "Successfully approved 1 requirement(s) and 1 unknown(s)" in res_review.output
+
+        # Verify items are now approved
+        updated_req = next(r for r in db.get_requirements(proj.id) if r.id == req.id)
+        assert updated_req.status == ArtifactState.APPROVED
+
+        updated_unk = next(u for u in db.get_unknowns(proj.id) if u.id == unk.id)
+        assert updated_unk.status == "OPEN"
+
+        # Running again reports no pending items
+        res_review_empty = runner.invoke(app, ["review-deep-path", proj.id])
+        assert res_review_empty.exit_code == 0
+        assert "No pending deep-path items found" in res_review_empty.output
+    finally:
+        gc.collect()
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+
 

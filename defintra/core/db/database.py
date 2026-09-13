@@ -56,6 +56,10 @@ class Database:
                     conn.execute("ALTER TABLE projects ADD COLUMN owner_id TEXT;")
                 except sqlite3.OperationalError:
                     pass  # Column already exists
+                try:
+                    conn.execute("ALTER TABLE unknowns ADD COLUMN provenance_json TEXT DEFAULT '{}';")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
                 conn.commit()
 
     # ==========================================
@@ -376,15 +380,16 @@ class Database:
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO unknowns (id, project_id, question, impact, category, status, resolution, priority_order, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO unknowns (id, project_id, question, impact, category, status, resolution, priority_order, provenance_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     question=excluded.question,
                     impact=excluded.impact,
                     category=excluded.category,
                     status=excluded.status,
                     resolution=excluded.resolution,
-                    priority_order=excluded.priority_order
+                    priority_order=excluded.priority_order,
+                    provenance_json=excluded.provenance_json
                 """,
                 (
                     unk.id,
@@ -395,6 +400,7 @@ class Database:
                     unk.status,
                     SecretRedactor.sanitize_all(unk.resolution) if unk.resolution else None,
                     unk.priority_order,
+                    unk.provenance.model_dump_json(),
                     unk.created_at,
                 ),
             )
@@ -412,20 +418,27 @@ class Database:
                     "SELECT * FROM unknowns WHERE project_id = ? ORDER BY priority_order ASC, id ASC",
                     (project_id,),
                 ).fetchall()
-            return [
-                Unknown(
-                    id=row["id"],
-                    project_id=row["project_id"],
-                    question=row["question"],
-                    impact=row["impact"],
-                    category=row["category"],
-                    status=row["status"],
-                    resolution=row["resolution"],
-                    priority_order=row["priority_order"],
-                    created_at=row["created_at"],
+            unknowns = []
+            for row in rows:
+                if "provenance_json" in row.keys() and row["provenance_json"] and row["provenance_json"] != "{}":
+                    prov = Provenance.model_validate_json(row["provenance_json"])
+                else:
+                    prov = Provenance()
+                unknowns.append(
+                    Unknown(
+                        id=row["id"],
+                        project_id=row["project_id"],
+                        question=row["question"],
+                        impact=row["impact"],
+                        category=row["category"],
+                        status=row["status"],
+                        resolution=row["resolution"],
+                        priority_order=row["priority_order"],
+                        provenance=prov,
+                        created_at=row["created_at"],
+                    )
                 )
-                for row in rows
-            ]
+            return unknowns
 
     # ==========================================
     # Evidence Layer

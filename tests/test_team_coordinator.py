@@ -5,7 +5,7 @@ import pytest
 from defintra.context.compiler import AgentRole
 from defintra.core.db.database import Database
 from defintra.core.discovery.engine import DiscoveryEngine
-from defintra.core.discovery.llm import LLMResponse
+from defintra.core.discovery.llm import LLMProviderError, LLMResponse, get_llm_provider
 from defintra.core.team.coordinator import StructuredEventType, TeamCoordinator
 
 
@@ -139,4 +139,42 @@ def test_team_coordinator_fallback_model_trigger(test_db):
         assert dispatch["attempts_log"][0]["valid"] is False
         assert dispatch["attempts_log"][1]["valid"] is False
         assert dispatch["attempts_log"][2]["valid"] is True
+
+
+def test_fallback_model_gemini_unavailable_when_only_anthropic_key_set(monkeypatch, test_db):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "mock-anthropic-key")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    # 1. Direct call to get_llm_provider with Gemini model must raise LLMProviderError
+    with pytest.raises(LLMProviderError) as exc_info:
+        get_llm_provider("Gemini 1.5 Pro")
+    assert exc_info.value.provider_name == "Gemini"
+    assert "API key not configured" in exc_info.value.reason
+
+    # 2. Coordinator adaptive loop logs fallback unavailable and fails gracefully
+    engine = DiscoveryEngine(test_db)
+    project = engine.run_fast_path("Fallback Unavailable App", "Test fallback error handling")
+    coordinator = TeamCoordinator(test_db)
+
+    # Mock primary provider (Claude) to return invalid output to force fallback
+    mock_claude = MagicMock()
+    mock_claude.generate.return_value = LLMResponse(content="")
+
+    with patch("defintra.core.discovery.llm.AnthropicLLMProvider", return_value=mock_claude):
+        dispatch = coordinator.dispatch_task(
+            project_id=project.id,
+            task_title="Review security posture",
+            role=AgentRole.SECURITY_ENGINEER,  # fallback is Gemini 1.5 Pro
+            execute=True,
+            action_type="read_repository",
+        )
+
+        assert dispatch["status"] == "FAILED"
+        assert len(dispatch["attempts_log"]) == 3
+        assert dispatch["attempts_log"][0]["valid"] is False
+        assert dispatch["attempts_log"][1]["valid"] is False
+        assert dispatch["attempts_log"][2]["valid"] is False
+        assert "Fallback model unavailable: Gemini API key not configured" in dispatch["attempts_log"][2]["reason"]
+
 

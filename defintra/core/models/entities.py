@@ -113,6 +113,7 @@ class Provenance(BaseModel):
     derived_from: List[str] = Field(default_factory=list)
     approved_by: Optional[str] = None
     last_validated: Optional[str] = None
+    source_trust_level: str = "USER_TYPED"  # "USER_TYPED" vs "FILE_INGESTED"
 
 
 class Requirement(BaseModel):
@@ -173,9 +174,10 @@ class Unknown(BaseModel):
     question: str
     impact: str  # HIGH, MEDIUM, LOW
     category: str  # ARCHITECTURE, SECURITY, DATABASE, UI, DEPLOYMENT
-    status: str = "OPEN"  # OPEN, RESOLVED, DISMISSED
+    status: str = "OPEN"  # OPEN, RESOLVED, DISMISSED, PROPOSED
     resolution: Optional[str] = None
     priority_order: int = 1
+    provenance: Provenance = Field(default_factory=Provenance)
     created_at: str = Field(default_factory=current_utc_time)
 
 

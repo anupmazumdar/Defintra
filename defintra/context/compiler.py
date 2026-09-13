@@ -19,6 +19,7 @@ from defintra.core.models.entities import (
     Decision,
     Requirement,
     RequirementPriority,
+    SourceType,
 )
 from defintra.core.security.redactor import SecretRedactor
 
@@ -311,6 +312,34 @@ class ContextCompiler:
         # 1. Evaluate Requirements
         candidate_reqs: List[Dict[str, Any]] = []
         for r in reqs:
+            trust_level = (
+                getattr(r.provenance, "source_trust_level", "USER_TYPED")
+                if hasattr(r, "provenance") and r.provenance
+                else "USER_TYPED"
+            )
+            source_type = (
+                r.provenance.source_type
+                if hasattr(r, "provenance") and r.provenance
+                else None
+            )
+            # Requirements from file ingestion that are AI inferred must be explicitly approved before inclusion
+            if (
+                trust_level == "FILE_INGESTED"
+                and (source_type == SourceType.AI_INFERRED or str(source_type) == "AI_INFERRED")
+                and r.status != ArtifactState.APPROVED
+            ):
+                explainable_items.append(
+                    ExplainableItem(
+                        item_id=r.id,
+                        item_type="REQUIREMENT",
+                        title=r.title,
+                        is_included=False,
+                        reason="Unapproved AI-inferred requirement from file ingestion awaiting human review",
+                        priority_score=0.0,
+                    )
+                )
+                continue
+
             r_words = set(re.findall(r"\w+", (r.title + " " + r.description).lower()))
             overlap = task_words.intersection(r_words)
 

@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS unknowns (
     status TEXT DEFAULT 'OPEN',
     resolution TEXT,
     priority_order INTEGER DEFAULT 1,
+    provenance_json TEXT DEFAULT '{}',
     created_at TEXT NOT NULL
 );
 
