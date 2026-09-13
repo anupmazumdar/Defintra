@@ -314,3 +314,33 @@ def test_cli_governance_and_new_commands(monkeypatch):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def test_cli_analyze_deep_and_llm_provider_error(monkeypatch):
+    from defintra.core.discovery.llm import LLMProviderError
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_file = os.path.join(tmpdir, "project.db")
+        monkeypatch.setattr(
+            "defintra.cli.main.get_db",
+            lambda: __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file),
+        )
+
+        # 1. Test analyze --deep with default provider (mock heuristic fallback)
+        res_deep = runner.invoke(app, ["analyze", "--deep", "Build an attendance management microservice."])
+        assert res_deep.exit_code == 0
+        assert "Analysis Summary" in res_deep.output
+
+        # 2. Test analyze --deep when LLMProviderError is raised
+        def mock_decompose_raise(*args, **kwargs):
+            raise LLMProviderError("Gemini", "Quota exceeded (HTTP 429)")
+
+        monkeypatch.setattr("defintra.core.discovery.llm.DeepPathEngine.decompose", mock_decompose_raise)
+        res_deep_err = runner.invoke(app, ["analyze", "--deep", "Build another service."])
+        assert res_deep_err.exit_code == 0
+        assert "Deep Path Decomposition Error (Gemini)" in res_deep_err.output
+        assert "Quota exceeded (HTTP 429)" in res_deep_err.output
+    finally:
+        gc.collect()
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+

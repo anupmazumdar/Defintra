@@ -5,6 +5,7 @@ Serves the rich dark-mode Defintra Control Center and provides JSON REST API.
 """
 
 import json
+import re
 import secrets
 import time
 import urllib.parse
@@ -164,13 +165,17 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _send_html(self, html_content: str, status: int = 200, set_cookie: Optional[str] = None):
+        nonce = secrets.token_urlsafe(16)
+        if "<script" in html_content:
+            html_content = re.sub(r"<script(?![^>]*nonce=)", f'<script nonce="{nonce}"', html_content)
         body = html_content.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        # TODO: remove style-src 'unsafe-inline' in follow-up once inline styles are refactored into a separate CSS file
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';",
+            f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';",
         )
         self.send_header("Referrer-Policy", "no-referrer")
         if set_cookie:

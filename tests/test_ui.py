@@ -289,6 +289,10 @@ def test_ui_stored_xss_escaped(running_ui_server):
         csp = res.headers.get("Content-Security-Policy", "")
         assert "default-src 'self'" in csp
         assert "connect-src 'self'" in csp
+        script_src = [part for part in csp.split(";") if "script-src" in part]
+        assert len(script_src) == 1
+        assert "'unsafe-inline'" not in script_src[0]
+        assert "'nonce-" in script_src[0]
 
     # 4. Verify that an XSS payload in database is properly escaped when transformed
     xss_payload = "<img src=x onerror=alert('xss')>"

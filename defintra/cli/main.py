@@ -20,7 +20,7 @@ from defintra.core.conflicts.engine import ConflictEngine
 from defintra.core.db.database import Database
 from defintra.core.diff.engine import SpecDiffEngine
 from defintra.core.discovery.engine import DiscoveryEngine
-from defintra.core.discovery.llm import DeepPathEngine
+from defintra.core.discovery.llm import DeepPathEngine, LLMProviderError
 from defintra.core.entropy.calculator import EntropyCalculator
 from defintra.core.governance.recovery import FailureRecoveryEngine
 from defintra.core.governance.stability import StabilityBudgetEngine
@@ -98,12 +98,17 @@ def analyze(
     with console.status("[bold cyan]Extracting intent, decomposing requirements into EARS, checking unknowns..."):
         project = engine.run_fast_path(p_name, raw_content)
         if deep:
-            deep_engine = DeepPathEngine()
-            deep_reqs, deep_unks = deep_engine.decompose(project.id, raw_content)
-            for dr in deep_reqs:
-                db.save_requirement(dr)
-            for du in deep_unks:
-                db.save_unknown(du)
+            try:
+                deep_engine = DeepPathEngine()
+                deep_reqs, deep_unks = deep_engine.decompose(project.id, raw_content)
+                for dr in deep_reqs:
+                    db.save_requirement(dr)
+                for du in deep_unks:
+                    db.save_unknown(du)
+            except LLMProviderError as exc:
+                console.print(
+                    f"\n[bold red]Deep Path Decomposition Error ({exc.provider_name}):[/bold red] {exc.reason}"
+                )
 
     reqs = db.get_requirements(project.id)
     decs = db.get_decisions(project.id)

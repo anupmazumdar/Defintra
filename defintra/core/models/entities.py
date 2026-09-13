@@ -76,6 +76,7 @@ class SourceType(str, Enum):
     USER_CONFIRMED = "USER_CONFIRMED"
     AI_INFERRED = "AI_INFERRED"
     AI_GUESSED = "AI_GUESSED"
+    MOCK_FALLBACK = "MOCK_FALLBACK"
 
 
 class DependencyKind(str, Enum):
