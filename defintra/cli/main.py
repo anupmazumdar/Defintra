@@ -362,6 +362,7 @@ def team(
     complexity: str = typer.Option("MEDIUM", "--complexity", "-c", help="Task complexity: LOW, MEDIUM, HIGH, CRITICAL"),
     execute: bool = typer.Option(True, "--execute/--no-execute", help="Execute task with routed AI provider and Adaptive Execution loop (§16, §20)"),
     approved_by: Optional[str] = typer.Option(None, "--approved-by", help="Explicit human authorization if action requires governance approval (§45)"),
+    action: str = typer.Option("read_repository", "--action", "-a", help="Explicit policy action type (read_repository, modify_file, deploy) (§45)"),
     project_id: Optional[str] = typer.Option(None, "--project", "-p", help="Target project ID"),
 ):
     """
@@ -386,6 +387,7 @@ def team(
         task_complexity=complexity,
         execute=execute,
         approved_by=approved_by,
+        action_type=action,
     )
 
     routing = res["routing"]

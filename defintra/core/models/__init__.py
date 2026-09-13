@@ -4,6 +4,7 @@ Domain models export.
 
 from defintra.core.models.entities import (
     ApprovalLevel,
+    Approver,
     ArtifactState,
     Assumption,
     ChangeRisk,
@@ -32,6 +33,7 @@ __all__ = [
     "RequirementPriority",
     "ArtifactState",
     "ApprovalLevel",
+    "Approver",
     "ChangeRisk",
     "SourceType",
     "DependencyKind",

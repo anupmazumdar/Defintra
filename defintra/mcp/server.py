@@ -215,7 +215,7 @@ class DefintraMCPServer:
 
         return {"project_id": project.id, "pack_type": pack_type, "content": content}
 
-    def dispatch_team_task(self, task: str, role: str = "SOFTWARE_ARCHITECT", project_id: Optional[str] = None) -> Dict[str, Any]:
+    def dispatch_team_task(self, task: str, role: str = "SOFTWARE_ARCHITECT", project_id: Optional[str] = None, action_type: Optional[str] = None) -> Dict[str, Any]:
         project = self.db.get_project(project_id) if project_id else self.db.get_first_project()
         if not project:
             return {"error": "No project found"}
@@ -224,7 +224,7 @@ class DefintraMCPServer:
         except KeyError:
             agent_role = AgentRole.SOFTWARE_ARCHITECT
 
-        return self.team_coordinator.dispatch_task(project.id, SecretRedactor.sanitize_all(task), agent_role)
+        return self.team_coordinator.dispatch_task(project.id, SecretRedactor.sanitize_all(task), agent_role, action_type=action_type)
 
     def trace_incident(self, error_text: str, project_id: Optional[str] = None) -> Dict[str, Any]:
         project = self.db.get_project(project_id) if project_id else self.db.get_first_project()

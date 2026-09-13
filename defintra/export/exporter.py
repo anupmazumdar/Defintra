@@ -8,7 +8,7 @@ Produces both:
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from defintra.core.db.database import Database
 from defintra.core.entropy.calculator import EntropyCalculator
@@ -16,10 +16,52 @@ from defintra.core.graph.engine import ProjectGraph
 from defintra.schemas.validator import validate_dir
 
 
+def _is_within(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 class Exporter:
-    def __init__(self, db: Database, project_id: str):
+    def __init__(
+        self,
+        db: Database,
+        project_id: str,
+        workspace_root: Optional[Union[str, Path]] = None,
+    ):
         self.db = db
         self.project_id = project_id
+        if workspace_root is not None:
+            self.workspace_root = Path(workspace_root).resolve()
+        else:
+            db_file = (
+                Path(self.db.db_path).resolve()
+                if hasattr(self.db, "db_path") and self.db.db_path
+                else None
+            )
+            if db_file and not _is_within(db_file, Path.cwd().resolve()):
+                self.workspace_root = db_file.parent.resolve()
+            else:
+                self.workspace_root = Path.cwd().resolve()
+
+    def _validate_confined_path(
+        self, target_path: Union[str, Path], workspace_root: Optional[Union[str, Path]] = None
+    ) -> Path:
+        root = Path(workspace_root).resolve() if workspace_root else self.workspace_root
+        target = Path(target_path)
+        if not target.is_absolute():
+            resolved = (root / target).resolve()
+        else:
+            resolved = target.resolve()
+
+        if not _is_within(resolved, root):
+            raise ValueError(
+                f"Security Error: Path traversal rejected. Target path '{target_path}' "
+                f"resolves outside workspace root '{root}'."
+            )
+        return resolved
 
     def build_dir_payload(self) -> Dict[str, Any]:
         project = self.db.get_project(self.project_id)
@@ -341,7 +383,12 @@ class Exporter:
             lines.append(f"- `{r.id}`: {r.description}")
         return "\n".join(lines)
 
-    def export_agent_rules(self, target_format: str = "cursor", output_path: Optional[str] = None) -> str:
+    def export_agent_rules(
+        self,
+        target_format: str = "cursor",
+        output_path: Optional[str] = None,
+        workspace_root: Optional[Union[str, Path]] = None,
+    ) -> str:
         fmt = target_format.lower()
         if fmt == "cursor" or fmt == ".cursorrules":
             content = self.generate_cursorrules()
@@ -353,13 +400,17 @@ class Exporter:
             content = self.generate_agents_md()
             default_path = "AGENTS.md"
 
-        target_file = Path(output_path or default_path)
+        target_file = self._validate_confined_path(output_path or default_path, workspace_root)
         target_file.parent.mkdir(parents=True, exist_ok=True)
         target_file.write_text(content, encoding="utf-8")
         return str(target_file)
 
-    def export_all(self, output_dir: str = ".defintra/export") -> Dict[str, str]:
-        out_path = Path(output_dir)
+    def export_all(
+        self,
+        output_dir: str = ".defintra/export",
+        workspace_root: Optional[Union[str, Path]] = None,
+    ) -> Dict[str, str]:
+        out_path = self._validate_confined_path(output_dir, workspace_root)
         out_path.mkdir(parents=True, exist_ok=True)
 
         dir_payload = self.build_dir_payload()

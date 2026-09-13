@@ -34,6 +34,69 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
     token_ttl_seconds: float = 8 * 3600  # Master token expires after 8 hours
     active_sessions: Dict[str, float] = {}  # session_id -> last_activity_timestamp
     session_inactivity_ttl: float = 8 * 3600  # Inactivity timeout (8 hours)
+    bootstrap_token_used: bool = False
+
+    # Rate limiting & Brute-force protection (§Issue 7)
+    failed_auth_attempts: Dict[str, list] = {}  # ip -> list of float timestamps
+    auth_lockouts: Dict[str, float] = {}  # ip -> lockout_until timestamp
+    max_failed_attempts: int = 5
+    auth_window_seconds: float = 60.0
+    lockout_duration_seconds: float = 60.0
+
+    @classmethod
+    def reset_rate_limits(cls):
+        cls.failed_auth_attempts.clear()
+        cls.auth_lockouts.clear()
+
+    def _get_client_ip(self) -> str:
+        if hasattr(self, "client_address") and self.client_address:
+            return str(self.client_address[0])
+        return "127.0.0.1"
+
+    def _is_rate_limited(self, ip: str) -> bool:
+        now = time.time()
+        lockout_until = self.auth_lockouts.get(ip, 0.0)
+        if now < lockout_until:
+            return True
+        if ip in self.auth_lockouts and now >= lockout_until:
+            self.auth_lockouts.pop(ip, None)
+        return False
+
+    def _record_failed_auth(self, ip: str):
+        now = time.time()
+        attempts = [t for t in self.failed_auth_attempts.get(ip, []) if (now - t) <= self.auth_window_seconds]
+        attempts.append(now)
+        self.failed_auth_attempts[ip] = attempts
+        if len(attempts) >= self.max_failed_attempts:
+            self.auth_lockouts[ip] = now + self.lockout_duration_seconds
+            self.failed_auth_attempts.pop(ip, None)
+
+    def _record_successful_auth(self, ip: str):
+        self.failed_auth_attempts.pop(ip, None)
+        self.auth_lockouts.pop(ip, None)
+
+    def _send_rate_limited_json(self):
+        self._send_json(
+            {"error": "Too Many Requests: Rate limit exceeded due to multiple failed authentication attempts."},
+            status=429,
+        )
+
+    def _send_rate_limited_html(self):
+        html_msg = (
+            "<!DOCTYPE html><html><head><title>429 Too Many Requests - Defintra</title>"
+            "<style>body{background:#0b0f19;color:#f3f4f6;font-family:sans-serif;text-align:center;padding:80px;}</style></head>"
+            "<body><h2>429 Too Many Requests</h2><p>Rate limit exceeded due to multiple failed authentication attempts. Please try again later.</p></body></html>"
+        )
+        self._send_html(html_msg, status=429)
+
+    def _has_credentials(self) -> bool:
+        cookie_header = self.headers.get("Cookie", "")
+        auth_header = self.headers.get("Authorization", "")
+        custom_header = self.headers.get("X-Defintra-Token", "").strip()
+        parsed = urllib.parse.urlparse(self.path)
+        query = urllib.parse.parse_qs(parsed.query)
+        q_token = query.get("token", [""])[0]
+        return bool(cookie_header or auth_header or custom_header or q_token)
 
     def _get_db(self) -> Database:
         return Database(self.db_path)
@@ -83,7 +146,11 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         if parsed.path in ("/", "/index.html"):
             query = urllib.parse.parse_qs(parsed.query)
             q_token = query.get("token", [""])[0]
-            if q_token and secrets.compare_digest(q_token, self.auth_token):
+            if (
+                q_token
+                and not self.bootstrap_token_used
+                and secrets.compare_digest(q_token, self.auth_token)
+            ):
                 return True
 
         return False
@@ -112,16 +179,30 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        client_ip = self._get_client_ip()
+        if self._is_rate_limited(client_ip):
+            self._send_rate_limited_json()
+            return
         if not self._check_auth():
+            if self._has_credentials():
+                self._record_failed_auth(client_ip)
+            if self._is_rate_limited(client_ip):
+                self._send_rate_limited_json()
+                return
             self.send_response(401)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
             self.wfile.write(b'{"error": "Unauthorized: Valid session token required"}')
             return
+        self._record_successful_auth(client_ip)
         self.send_response(204)
         self.end_headers()
 
     def do_DELETE(self):
+        client_ip = self._get_client_ip()
+        if self._is_rate_limited(client_ip):
+            self._send_rate_limited_json()
+            return
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/session":
             cookie_header = self.headers.get("Cookie", "")
@@ -148,11 +229,61 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
     def do_GET(self):
+        client_ip = self._get_client_ip()
+        if self._is_rate_limited(client_ip):
+            parsed = urllib.parse.urlparse(self.path)
+            if parsed.path in ("/", "/index.html"):
+                self._send_rate_limited_html()
+            else:
+                self._send_rate_limited_json()
+            return
+
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
         if path in ("/", "/index.html"):
+            query = urllib.parse.parse_qs(parsed.query)
+            q_token = query.get("token", [""])[0]
+            if q_token:
+                now = time.time()
+                is_expired = self.token_created_at > 0 and (now - self.token_created_at > self.token_ttl_seconds)
+                if (
+                    not self.bootstrap_token_used
+                    and self.auth_token
+                    and not is_expired
+                    and secrets.compare_digest(q_token, self.auth_token)
+                ):
+                    self._record_successful_auth(client_ip)
+                    DefintraAPIHandler.bootstrap_token_used = True
+                    session_id = secrets.token_urlsafe(32)
+                    self.active_sessions[session_id] = now
+                    cookie_hdr = f"defintra_session={session_id}; HttpOnly; SameSite=Strict; Path=/"
+                    self.send_response(303)
+                    self.send_header("Location", path)
+                    self.send_header("Set-Cookie", cookie_hdr)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                else:
+                    self._record_failed_auth(client_ip)
+                    if self._is_rate_limited(client_ip):
+                        self._send_rate_limited_html()
+                        return
+                    unauth_html = (
+                        "<!DOCTYPE html><html><head><title>401 Unauthorized - Defintra</title>"
+                        "<style>body{background:#0b0f19;color:#f3f4f6;font-family:sans-serif;text-align:center;padding:80px;}"
+                        "code{color:#38bdf8;background:rgba(255,255,255,0.08);padding:3px 8px;border-radius:4px;}</style></head>"
+                        "<body><h2>401 Unauthorized</h2><p>Invalid, expired, or already used bootstrap token. Run <code>defintra ui</code> in your terminal.</p></body></html>"
+                    )
+                    self._send_html(unauth_html, status=401)
+                    return
+
             if not self._check_auth():
+                if self._has_credentials():
+                    self._record_failed_auth(client_ip)
+                if self._is_rate_limited(client_ip):
+                    self._send_rate_limited_html()
+                    return
                 unauth_html = (
                     "<!DOCTYPE html><html><head><title>401 Unauthorized - Defintra</title>"
                     "<style>body{background:#0b0f19;color:#f3f4f6;font-family:sans-serif;text-align:center;padding:80px;}"
@@ -162,25 +293,24 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 self._send_html(unauth_html, status=401)
                 return
 
-            # Attach session cookie if authenticated via query param token
-            cookie_hdr = None
-            query = urllib.parse.parse_qs(parsed.query)
-            q_token = query.get("token", [""])[0]
-            if q_token and self.auth_token and secrets.compare_digest(q_token, self.auth_token):
-                session_id = secrets.token_urlsafe(32)
-                self.active_sessions[session_id] = time.time()
-                cookie_hdr = f"defintra_session={session_id}; HttpOnly; SameSite=Strict; Path=/"
-
+            self._record_successful_auth(client_ip)
             html_file = Path(__file__).parent / "dashboard.html"
             if html_file.exists():
-                self._send_html(html_file.read_text(encoding="utf-8"), set_cookie=cookie_hdr)
+                self._send_html(html_file.read_text(encoding="utf-8"))
             else:
-                self._send_html("<h1>Defintra Dashboard Loading...</h1>", set_cookie=cookie_hdr)
+                self._send_html("<h1>Defintra Dashboard Loading...</h1>")
             return
 
         if not self._check_auth():
+            if self._has_credentials():
+                self._record_failed_auth(client_ip)
+            if self._is_rate_limited(client_ip):
+                self._send_rate_limited_json()
+                return
             self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
             return
+
+        self._record_successful_auth(client_ip)
 
         db = self._get_db()
         project = db.get_first_project()
@@ -330,6 +460,11 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
     def do_POST(self):
+        client_ip = self._get_client_ip()
+        if self._is_rate_limited(client_ip):
+            self._send_rate_limited_json()
+            return
+
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         length = int(self.headers.get("Content-Length", 0))
@@ -346,6 +481,7 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 and secrets.compare_digest(req_token, self.auth_token)
                 and (self.token_created_at == 0 or now - self.token_created_at <= self.token_ttl_seconds)
             ):
+                self._record_successful_auth(client_ip)
                 session_id = secrets.token_urlsafe(32)
                 self.active_sessions[session_id] = now
                 body = json.dumps({"status": "authenticated", "session_id": session_id}).encode("utf-8")
@@ -360,17 +496,29 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             else:
+                self._record_failed_auth(client_ip)
+                if self._is_rate_limited(client_ip):
+                    self._send_rate_limited_json()
+                    return
                 self._send_json({"error": "Unauthorized: Invalid or expired bootstrap token"}, 401)
                 return
 
         elif path == "/api/token/rotate":
             if not self._check_auth():
+                if self._has_credentials():
+                    self._record_failed_auth(client_ip)
+                if self._is_rate_limited(client_ip):
+                    self._send_rate_limited_json()
+                    return
                 self._send_json({"error": "Unauthorized: Valid session or token required"}, 401)
                 return
+            self._record_successful_auth(client_ip)
             new_token = secrets.token_urlsafe(24)
             DefintraAPIHandler.auth_token = new_token
             DefintraAPIHandler.token_created_at = time.time()
+            DefintraAPIHandler.bootstrap_token_used = False
             DefintraAPIHandler.active_sessions.clear()
+            DefintraAPIHandler.reset_rate_limits()
 
             new_session_id = secrets.token_urlsafe(32)
             DefintraAPIHandler.active_sessions[new_session_id] = time.time()
@@ -393,10 +541,18 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/token/revoke":
             if not self._check_auth():
+                if self._has_credentials():
+                    self._record_failed_auth(client_ip)
+                if self._is_rate_limited(client_ip):
+                    self._send_rate_limited_json()
+                    return
                 self._send_json({"error": "Unauthorized: Valid session or token required"}, 401)
                 return
+            self._record_successful_auth(client_ip)
             DefintraAPIHandler.auth_token = None
+            DefintraAPIHandler.bootstrap_token_used = True
             DefintraAPIHandler.active_sessions.clear()
+            DefintraAPIHandler.reset_rate_limits()
             body = json.dumps({"status": "revoked"}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -410,8 +566,15 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             return
 
         if not self._check_auth():
+            if self._has_credentials():
+                self._record_failed_auth(client_ip)
+            if self._is_rate_limited(client_ip):
+                self._send_rate_limited_json()
+                return
             self._send_json({"error": "Unauthorized: Valid session token required"}, 401)
             return
+
+        self._record_successful_auth(client_ip)
 
         db = self._get_db()
         project = db.get_first_project()
@@ -471,8 +634,9 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                 role = AgentRole[role_str.upper()]
             except KeyError:
                 role = AgentRole.SOFTWARE_ARCHITECT
+            action_type = payload.get("action_type") or payload.get("action")
             coordinator = TeamCoordinator(db)
-            res = coordinator.dispatch_task(project.id, task, role)
+            res = coordinator.dispatch_task(project.id, task, role, action_type=action_type)
             self._send_json(res)
 
         elif path == "/api/blast-radius":
@@ -533,6 +697,8 @@ def start_ui_server(
     DefintraAPIHandler.db_path = db_path
     DefintraAPIHandler.auth_token = token
     DefintraAPIHandler.token_created_at = time.time()
+    DefintraAPIHandler.bootstrap_token_used = False
+    DefintraAPIHandler.reset_rate_limits()
     server = ThreadingHTTPServer(("127.0.0.1", port), DefintraAPIHandler)
     url = f"http://127.0.0.1:{port}/?token={token}"
     print(f"Defintra Control Center running at: {url}")

@@ -176,6 +176,16 @@ CREATE TABLE IF NOT EXISTS benchmarks (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS approvers (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    role TEXT DEFAULT 'USER', -- 'USER', 'ADMIN'
+    is_admin INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    UNIQUE(project_id, name)
+);
+
 -- Indexes for efficient graph and entity lookups
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirements(project_id);
 CREATE INDEX IF NOT EXISTS idx_dec_project ON decisions(project_id);
@@ -187,5 +197,6 @@ CREATE INDEX IF NOT EXISTS idx_dep_tgt ON dependencies(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_dep_proj ON dependencies(project_id);
 CREATE INDEX IF NOT EXISTS idx_pol_proj ON policies(project_id);
 CREATE INDEX IF NOT EXISTS idx_bm_proj ON benchmarks(project_id);
+CREATE INDEX IF NOT EXISTS idx_approvers_proj ON approvers(project_id);
 
 

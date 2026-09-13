@@ -47,6 +47,9 @@ def running_ui_server(tmp_path):
 
     DefintraAPIHandler.db_path = str(db_file)
     DefintraAPIHandler.auth_token = TEST_TOKEN
+    DefintraAPIHandler.bootstrap_token_used = False
+    DefintraAPIHandler.active_sessions.clear()
+    DefintraAPIHandler.reset_rate_limits()
     # Find free port
     server = ThreadingHTTPServer(("127.0.0.1", 0), DefintraAPIHandler)
     port = server.server_address[1]
@@ -60,6 +63,8 @@ def running_ui_server(tmp_path):
     server.shutdown()
     server.server_close()
     DefintraAPIHandler.auth_token = None
+    DefintraAPIHandler.bootstrap_token_used = False
+    DefintraAPIHandler.reset_rate_limits()
 
 
 def test_ui_get_html_and_state(running_ui_server):
@@ -92,9 +97,15 @@ def test_ui_get_html_and_state(running_ui_server):
         assert "nodes" in data
         assert len(data["nodes"]) >= 3
 
-    # 4. Token via query param: allowed on bootstrap HTML route (/), rejected on API routes to prevent URL leak
-    with urllib.request.urlopen(f"{running_ui_server}/?token={TEST_TOKEN}") as res:
-        assert res.status == 200
+    # 4. Token via query param: allowed on bootstrap HTML route (/), redirected with 303 + cookie to prevent URL history leak
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def http_error_303(self, req, fp, code, msg, headers):
+            return fp
+
+    opener = urllib.request.build_opener(NoRedirect)
+    with opener.open(f"{running_ui_server}/?token={TEST_TOKEN}") as res:
+        assert res.status == 303
+        assert res.headers.get("Location") == "/"
         assert "defintra_session=" in res.headers.get("Set-Cookie", "")
 
     try:

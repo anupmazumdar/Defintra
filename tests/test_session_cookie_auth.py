@@ -31,7 +31,9 @@ def test_session_token_exchange_and_url_leak_prevention():
     bootstrap_token = "sec-bootstrap-token-999"
     DefintraAPIHandler.db_path = db_path
     DefintraAPIHandler.auth_token = bootstrap_token
+    DefintraAPIHandler.bootstrap_token_used = False
     DefintraAPIHandler.active_sessions = {}
+    DefintraAPIHandler.reset_rate_limits()
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), DefintraAPIHandler)
     port = server.server_address[1]
@@ -88,12 +90,25 @@ def test_session_token_exchange_and_url_leak_prevention():
         except error.HTTPError as e:
             assert e.code == 401
 
-        # 5. Bootstrap HTML route (/) accepts ?token= and attaches session cookie
+        # 5. Bootstrap HTML route (/) accepts ?token=, issues 303 redirect with Set-Cookie to prevent URL history retention
+        class NoRedirect(request.HTTPRedirectHandler):
+            def http_error_303(self, req, fp, code, msg, headers):
+                return fp
+
+        opener = request.build_opener(NoRedirect)
         html_bootstrap_url = f"{base_url}/?token={bootstrap_token}"
-        with request.urlopen(html_bootstrap_url) as resp:
-            assert resp.status == 200
+        with opener.open(html_bootstrap_url) as resp:
+            assert resp.status == 303
+            assert resp.headers.get("Location") == "/"
             cookie_header = resp.headers.get("Set-Cookie", "")
             assert "defintra_session=" in cookie_header
+
+        # Reusing the bootstrap token via query parameter MUST be rejected with 401 (single-use)
+        try:
+            opener.open(html_bootstrap_url)
+            assert False, "Reusing single-use bootstrap token query param must fail with 401"
+        except error.HTTPError as e:
+            assert e.code == 401
 
         # 6. Logout / DELETE /api/session expires session
         delete_req = request.Request(

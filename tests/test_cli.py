@@ -276,11 +276,16 @@ def test_cli_governance_and_new_commands(monkeypatch):
         assert "Sandbox Policy Evaluation" in res_sbx_eval.output
         assert "POLICY_APPROVED" in res_sbx_eval.output
 
-        # Test Sandbox real command execution
-        res_sbx_exec = runner.invoke(app, ["sandbox", "exec", "read_repository", "-c", "python -c \"print('SBX_OK')\""])
+        # Test Sandbox real command execution requires execute_shell with approval
+        res_sbx_exec = runner.invoke(app, ["sandbox", "exec", "execute_shell", "--approved-by", "DevLead", "-c", "python -c \"print('SBX_OK')\""])
         assert res_sbx_exec.exit_code == 0
         assert "Sandbox Action Executed" in res_sbx_exec.output
         assert "SBX_OK" in res_sbx_exec.output
+
+        # Test Sandbox command payload under non-shell action is rejected
+        res_sbx_bypass = runner.invoke(app, ["sandbox", "exec", "read_repository", "-c", "python -c \"print('FAIL')\""])
+        assert res_sbx_bypass.exit_code == 1
+        assert "SANDBOX ACTION REFUSED BY POLICY ENGINE" in res_sbx_bypass.output
 
         # Test Sandbox authorize command
         res_sbx_auth = runner.invoke(app, ["sandbox", "authorize", "read_repository"])

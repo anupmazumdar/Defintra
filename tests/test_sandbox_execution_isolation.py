@@ -29,17 +29,29 @@ def test_sandbox_subprocess_execution_and_cwd_confinement(tmp_path):
     assert sbx.worktree_path is not None
     wt_dir = Path(sbx.worktree_path).resolve()
 
-    # 1. Execute command and verify cwd confinement
+    # 1. Reject command execution attached to non-shell action (read_repository)
     py_check_cwd = "python -c \"import os, pathlib; print('CONFINED_CWD:', pathlib.Path.cwd().resolve())\""
-    res = mgr.execute_sandbox_action(
+    res_bypass = mgr.execute_sandbox_action(
         sbx,
         action_type="read_repository",
         context={"command": py_check_cwd},
     )
-    assert res["allowed"] is True
-    assert res["status"] == "EXECUTED"
-    assert res["returncode"] == 0
-    assert str(wt_dir) in res["stdout"]
+    assert res_bypass["allowed"] is False
+    assert res_bypass["status"] == "BLOCKED"
+    assert res_bypass["executed"] is False
+    assert "Security violation" in res_bypass["reason"]
+
+    # 2. Approved execute_shell successfully executes with cwd confinement
+    res_approved = mgr.execute_sandbox_action(
+        sbx,
+        action_type="execute_shell",
+        approved_by="DevLead",
+        context={"command": py_check_cwd},
+    )
+    assert res_approved["allowed"] is True
+    assert res_approved["status"] == "EXECUTED"
+    assert res_approved["returncode"] == 0
+    assert str(wt_dir) in res_approved["stdout"]
 
 
 def test_sandbox_environment_variable_scrubbing(tmp_path):
@@ -62,7 +74,8 @@ def test_sandbox_environment_variable_scrubbing(tmp_path):
         py_check_env = "python -c \"import os; print('FOUND_SECRETS:', [k for k in os.environ if any(s in k for s in ['OPENAI', 'ANTHROPIC', 'AWS_SECRET', 'GITHUB_TOKEN'])])\""
         res = mgr.execute_sandbox_action(
             sbx,
-            action_type="read_repository",
+            action_type="execute_shell",
+            approved_by="DevLead",
             context={"command": py_check_env},
         )
         assert res["allowed"] is True
@@ -89,7 +102,8 @@ def test_sandbox_execution_timeout_enforcement(tmp_path):
     py_sleep = "python -c \"import time; time.sleep(4)\""
     res = mgr.execute_sandbox_action(
         sbx,
-        action_type="read_repository",
+        action_type="execute_shell",
+        approved_by="DevLead",
         context={"command": py_sleep, "timeout": 1},
     )
     assert res["allowed"] is False
@@ -132,7 +146,7 @@ def test_sandbox_path_escape_blocks_execution(tmp_path):
     res = mgr.execute_sandbox_action(
         sbx,
         action_type="write_code",
-        context={"file": str(outside_file), "command": "python -c \"print('ESCAPE')\""},
+        context={"file": str(outside_file)},
     )
     assert res["allowed"] is False
     assert res["status"] == "BLOCKED"

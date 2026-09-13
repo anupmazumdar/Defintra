@@ -10,6 +10,7 @@ from typing import Any, List, Optional
 
 from defintra.core.models.entities import (
     ApprovalLevel,
+    Approver,
     ArtifactState,
     Assumption,
     ChangeRisk,
@@ -90,6 +91,7 @@ class Database:
                 ),
             )
             conn.commit()
+        self.seed_default_approvers(project.id)
 
     def get_project(self, project_id: str) -> Optional[Project]:
         with self._get_connection() as conn:
@@ -769,4 +771,86 @@ class Database:
                     (limit,),
                 ).fetchall()
             return [dict(r) for r in rows]
+
+    # ==========================================
+    # Approver Operations (§45)
+    # ==========================================
+    def save_approver(self, approver: Approver):
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO approvers (id, project_id, name, role, is_admin, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id, name) DO UPDATE SET
+                    id=excluded.id,
+                    role=excluded.role,
+                    is_admin=excluded.is_admin
+                """,
+                (
+                    approver.id,
+                    approver.project_id,
+                    approver.name,
+                    approver.role,
+                    1 if approver.is_admin else 0,
+                    approver.created_at,
+                ),
+            )
+            conn.commit()
+
+    def get_approvers(self, project_id: str) -> List[Approver]:
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT id, project_id, name, role, is_admin, created_at FROM approvers WHERE project_id = ? ORDER BY name ASC",
+                (project_id,),
+            ).fetchall()
+            return [
+                Approver(
+                    id=r["id"],
+                    project_id=r["project_id"],
+                    name=r["name"],
+                    role=r["role"],
+                    is_admin=bool(r["is_admin"]),
+                    created_at=r["created_at"],
+                )
+                for r in rows
+            ]
+
+    def get_approver(self, project_id: str, identifier: str) -> Optional[Approver]:
+        clean_id = identifier.strip().lower()
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT id, project_id, name, role, is_admin, created_at FROM approvers WHERE project_id = ? AND (LOWER(id) = ? OR LOWER(name) = ?)",
+                (project_id, clean_id, clean_id),
+            ).fetchone()
+            if not row:
+                return None
+            return Approver(
+                id=row["id"],
+                project_id=row["project_id"],
+                name=row["name"],
+                role=row["role"],
+                is_admin=bool(row["is_admin"]),
+                created_at=row["created_at"],
+            )
+
+    def delete_approver(self, project_id: str, approver_id: str) -> bool:
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM approvers WHERE project_id = ? AND (id = ? OR name = ?)",
+                (project_id, approver_id, approver_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def seed_default_approvers(self, project_id: str):
+        default_approvers = [
+            Approver(id=f"appr_{project_id}_devlead", project_id=project_id, name="DevLead", role="ADMIN", is_admin=True),
+            Approver(id=f"appr_{project_id}_seclead", project_id=project_id, name="SecurityLead", role="ADMIN", is_admin=True),
+            Approver(id=f"appr_{project_id}_engineer", project_id=project_id, name="Engineer", role="USER", is_admin=False),
+        ]
+        for a in default_approvers:
+            try:
+                self.save_approver(a)
+            except Exception:
+                pass
 

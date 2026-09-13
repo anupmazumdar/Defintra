@@ -6,6 +6,7 @@ snapshot hashes, and pre-production governance gates.
 
 import hashlib
 import os
+import shlex
 import shutil
 import subprocess
 import uuid
@@ -15,6 +16,56 @@ from typing import Any, Dict, Optional
 from defintra.core.db.database import Database
 from defintra.core.models.entities import current_utc_time
 from defintra.core.policy.engine import PolicyDecision, PolicyEngine
+
+ALLOWED_SANDBOX_BINARIES = {
+    "python",
+    "python3",
+    "pytest",
+    "git",
+    "node",
+    "npm",
+    "npx",
+    "pip",
+    "echo",
+    "cat",
+    "ls",
+    "dir",
+    "mkdir",
+    "rm",
+    "cp",
+    "mv",
+    "touch",
+    "grep",
+    "find",
+    "cargo",
+    "go",
+    "rustc",
+    "tsc",
+}
+
+
+def _parse_cmd_to_argv(cmd: Any) -> list[str]:
+    """
+    Parses a command string or list into an explicit argv list for subprocess execution
+    without invoking the system shell (shell=False).
+    """
+    if isinstance(cmd, list):
+        return [str(c) for c in cmd]
+    if isinstance(cmd, str):
+        try:
+            if os.name == "nt":
+                tokens = shlex.split(cmd, posix=False)
+                clean_tokens = []
+                for t in tokens:
+                    if (t.startswith('"') and t.endswith('"')) or (t.startswith("'") and t.endswith("'")):
+                        clean_tokens.append(t[1:-1])
+                    else:
+                        clean_tokens.append(t)
+                return clean_tokens
+            return shlex.split(cmd, posix=True)
+        except Exception:
+            return cmd.split()
+    return []
 
 
 class SandboxState:
@@ -191,7 +242,8 @@ class SandboxManager:
             if k_upper in allowed_base_vars:
                 if not any(sub in k_upper for sub in ("KEY", "TOKEN", "SECRET", "PASS", "AUTH", "CREDENTIAL")):
                     scrubbed[k] = v
-        # Network isolation: disable outbound proxying by default
+        # Outbound proxy diversion: sets proxy variables to loopback for proxy-aware runtimes.
+        # NOTE: This does NOT provide kernel-level network isolation (non-proxy-aware sockets bypass this).
         scrubbed["HTTP_PROXY"] = "http://127.0.0.1:0"
         scrubbed["HTTPS_PROXY"] = "http://127.0.0.1:0"
         scrubbed["ALL_PROXY"] = "socks5://127.0.0.1:0"
@@ -209,16 +261,32 @@ class SandboxManager:
         Enforces policy boundaries, filesystem confinement, and isolated execution (§25, §45).
         Refuses execution on DENY, unapproved REQUIRES_APPROVAL actions, or out-of-bounds file access.
         
-        Execution Truthfulness:
+        Execution Truthfulness & Security Architecture:
+        - Shell commands are strictly forbidden on non-execute_shell action types (prevents approval bypass).
         - Pure policy checks without execution payloads return status 'POLICY_APPROVED' (or 'POLICY_DENIED').
         - Real execution occurs when:
-          * action_type == 'execute_shell' (or context contains 'command'): runs confined subprocess with
-            scrubbed environment, proxy disabled, and strict timeout.
+          * action_type == 'execute_shell': runs confined subprocess without shell interpreter (shell=False)
+            using an explicit argv list against an allowed binary list, with scrubbed environment and timeout.
           * action_type == 'modify_file' (with 'file' and 'content' in context): writes file strictly confined
             within sandbox.worktree_path.
         - Status 'EXECUTED' is ONLY returned when an actual action was executed successfully.
         """
         wt_root = Path(sandbox.worktree_path).resolve() if sandbox.worktree_path else None
+
+        # Enforce that command execution payloads are strictly prohibited under non-execute_shell actions.
+        # This prevents bypass of the HIGH-risk REQUIRES_APPROVAL gate via actions like read_repository.
+        has_command = bool(context and ("command" in context or "cmd" in context))
+        if has_command and action_type != "execute_shell":
+            return {
+                "sandbox_id": sandbox.sandbox_id,
+                "action_type": action_type,
+                "allowed": False,
+                "executed": False,
+                "status": "BLOCKED",
+                "decision": "DENY",
+                "risk_level": "CRITICAL",
+                "reason": f"Security violation: Command execution payload supplied for non-shell action '{action_type}'. Shell commands may only execute under 'execute_shell'.",
+            }
 
         if wt_root and context:
             target_path_str = context.get("file") or context.get("path") or context.get("file_path")
@@ -263,11 +331,51 @@ class SandboxManager:
             return res
 
         # 1. Bounded Execution for Shell Commands
-        has_command = context and ("command" in context or "cmd" in context)
-        if action_type == "execute_shell" or has_command:
+        #
+        # ISOLATION GUARANTEES & THREAT MODEL:
+        # What this implementation DOES provide:
+        # - Shell Injection Prevention: Dropping shell=True in favor of explicit argv tokenization
+        #   (shell=False) prevents shell metacharacter injection (; | && ` $() < >).
+        # - Binary Execution Allowlist: Restricts executable binaries to ALLOWED_SANDBOX_BINARIES
+        #   (python, pytest, git, npm, etc.), blocking invocation of arbitrary administrative or system tools.
+        # - Working Directory Confinement: Sets subprocess cwd to sandbox.worktree_path, scoping local
+        #   file access to the isolated staging directory.
+        # - Ambient Secret Stripping: Strips credentials, API keys, tokens, and sensitive env vars
+        #   from the spawned process environment.
+        # - Process Lifetime Bounding: Enforces a strict timeout (default 30s) to prevent resource exhaustion.
+        #
+        # What this implementation DOES NOT provide (Known Limitations & Non-Guarantees):
+        # - True Network Isolation: Setting HTTP_PROXY/HTTPS_PROXY/ALL_PROXY to 127.0.0.1:0 does NOT provide
+        #   true OS- or kernel-level network isolation. Raw sockets, UDP traffic, or libraries that ignore
+        #   standard proxy env vars can still establish outbound connections unless wrapped in dedicated
+        #   network namespaces (Linux netns), seccomp filters, or container environments.
+        # - Filesystem Read Confinement: Without kernel namespaces (mount/chroot/pivot_root) or containerization,
+        #   the child process runs with host user privileges and can read any files on the filesystem that
+        #   the current OS user has read permissions for.
+        if action_type == "execute_shell":
             cmd = context.get("command") or context.get("cmd") if context else None
             if not cmd:
                 res["reason"] = f"{reason} (Policy evaluated: shell execution permitted, but no command provided)"
+                return res
+
+            argv = _parse_cmd_to_argv(cmd)
+            if not argv:
+                res["allowed"] = False
+                res["executed"] = False
+                res["status"] = "BLOCKED"
+                res["reason"] = "Failed to parse command arguments into safe argv list"
+                return res
+
+            binary = Path(argv[0]).stem.lower()
+            if binary not in ALLOWED_SANDBOX_BINARIES:
+                res["allowed"] = False
+                res["executed"] = False
+                res["status"] = "BLOCKED"
+                res["decision"] = "DENY"
+                res["reason"] = (
+                    f"Binary '{binary}' is not in the sandbox allowed binaries list. "
+                    f"Permitted binaries: {', '.join(sorted(ALLOWED_SANDBOX_BINARIES))}"
+                )
                 return res
 
             timeout = int(context.get("timeout", 30))
@@ -276,8 +384,8 @@ class SandboxManager:
 
             try:
                 proc = subprocess.run(
-                    cmd,
-                    shell=True,
+                    argv,
+                    shell=False,
                     cwd=cwd_dir,
                     env=clean_env,
                     capture_output=True,

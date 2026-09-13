@@ -259,10 +259,12 @@ class TeamCoordinator:
         task_complexity: str = "MEDIUM",
         execute: bool = True,
         approved_by: Optional[str] = None,
+        action_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Dispatches task to specialized AI role with compiled minimum sufficient context (§16, §17, §20).
         Consults Policy Engine before execution if action requires governance approval.
+        Requires validated action_type and uses keyword heuristics strictly as risk escalation signals.
         """
         project = self.db.get_project(project_id)
         if not project:
@@ -280,13 +282,13 @@ class TeamCoordinator:
         # 2. Get Model Routing recommendation
         routing = self.route_model(role, task_complexity)
 
-        # 3. Check Governance Policy (§45)
+        # 3. Check Governance Policy with Risk Escalation (§45)
         from defintra.core.policy.engine import PolicyEngine
         pe = PolicyEngine(self.db)
-        inferred_action = pe.infer_action_from_task(task_title)
+        effective_action = pe.escalate_action_from_task(action_type, task_title)
         allowed, policy_reason, policy_decision = pe.enforce_action(
             project_id=project_id,
-            action_type=inferred_action,
+            action_type=effective_action,
             approved_by=approved_by,
         )
 
@@ -294,9 +296,10 @@ class TeamCoordinator:
             project_id=project_id,
             event_type=StructuredEventType.POLICY_CHECK,
             actor_role=role,
-            summary=f"Policy check for task '{task_title}' -> {policy_decision.decision.value} ({inferred_action})",
+            summary=f"Policy check for task '{task_title}' -> {policy_decision.decision.value} ({effective_action})",
             payload={
-                "action": inferred_action,
+                "action": effective_action,
+                "requested_action": action_type,
                 "decision": policy_decision.decision.value,
                 "allowed": allowed,
                 "approved_by": approved_by,
@@ -312,7 +315,7 @@ class TeamCoordinator:
                 "assigned_role": role.value,
                 "routing": routing.to_dict(),
                 "policy_enforcement": {
-                    "action": inferred_action,
+                    "action": effective_action,
                     "decision": policy_decision.decision.value,
                     "risk_level": policy_decision.risk_level.value,
                     "allowed": False,
@@ -365,7 +368,7 @@ class TeamCoordinator:
             "assigned_role": role.value,
             "routing": routing.to_dict(),
             "policy_enforcement": {
-                "action": inferred_action,
+                "action": effective_action,
                 "decision": policy_decision.decision.value,
                 "risk_level": policy_decision.risk_level.value,
                 "allowed": True,

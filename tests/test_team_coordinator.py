@@ -36,6 +36,7 @@ def test_team_coordinator_dispatch_and_routing(test_db):
         task_title="Design database schema and isolation model",
         role=AgentRole.DATABASE_ENGINEER,
         execute=True,
+        action_type="read_repository",
     )
     assert dispatch["assigned_role"] == "DATABASE_ENGINEER"
     assert "routing" in dispatch
@@ -87,6 +88,7 @@ def test_team_coordinator_adaptive_retry_and_fallback(test_db):
             task_title="Design rate limiting subsystem",
             role=AgentRole.BACKEND_ENGINEER,
             execute=True,
+            action_type="read_repository",
         )
 
         assert dispatch["status"] == "COMPLETED"
@@ -129,6 +131,7 @@ def test_team_coordinator_fallback_model_trigger(test_db):
             task_title="Design high concurrency caching subsystem",
             role=AgentRole.SOFTWARE_ARCHITECT,
             execute=True,
+            action_type="read_repository",
         )
 
         assert dispatch["status"] == "COMPLETED"

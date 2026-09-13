@@ -246,3 +246,12 @@ class Project(BaseModel):
     spec_health_score: float = 0.0  # 0.0% to 100.0%
     created_at: str = Field(default_factory=current_utc_time)
     updated_at: str = Field(default_factory=current_utc_time)
+
+
+class Approver(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    role: str = "USER"  # "USER" or "ADMIN"
+    is_admin: bool = False
+    created_at: str = Field(default_factory=current_utc_time)
