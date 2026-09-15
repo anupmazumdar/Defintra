@@ -147,6 +147,82 @@ class BrownfieldScanner:
 
         return endpoints, models
 
+    @staticmethod
+    def _infer_route_behavior(method: str, route: str) -> str:
+        method_upper = method.upper().strip()
+        route_clean = route.strip()
+        segments = [
+            seg for seg in route_clean.split("/")
+            if seg and seg.lower() not in ("api", "v1", "v2", "v3", "v4", "v0")
+        ]
+        resource_parts = [s for s in segments if not (s.startswith("{") or s.startswith(":") or s.isdigit())]
+        resource = resource_parts[-1] if resource_parts else (segments[-1] if segments else "resource")
+        resource_phrase = resource.strip("{}").replace("_", " ").replace("-", " ")
+
+        if method_upper == "GET":
+            if any(h in route_clean.lower() for h in ("health", "ping", "status", "ready")):
+                return "verify server health metrics and return service status payload"
+            if any(s.startswith("{") or s.startswith(":") for s in route_clean.split("/")):
+                return f"retrieve and return the specified {resource_phrase} record matching the provided identifier"
+            return f"retrieve and return the active collection of {resource_phrase} matching request parameters"
+        elif method_upper == "POST":
+            if any(a in route_clean.lower() for a in ("auth", "login", "token", "session")):
+                return "verify credentials, authenticate the client, and issue secure session tokens"
+            return f"validate payload schema, process the {resource_phrase} request, and persist new entity records"
+        elif method_upper == "PUT":
+            return f"validate payload schema, replace the target {resource_phrase} entity, and return updated state"
+        elif method_upper == "PATCH":
+            return f"validate partial payload updates, modify the target {resource_phrase} entity, and persist changes"
+        elif method_upper == "DELETE":
+            return f"verify authorization privileges and delete or soft-delete the specified {resource_phrase} entity"
+        else:
+            return f"process the {method_upper} request for {route_clean} and return appropriate response payload"
+
+    @staticmethod
+    def _detect_frameworks(files: List[Path]) -> List[str]:
+        frameworks: Set[str] = set()
+        for f in files:
+            if not f.is_file():
+                continue
+            try:
+                content = f.read_text(encoding="utf-8", errors="ignore")
+                content_lower = content.lower()
+                if "fastapi" in content_lower:
+                    frameworks.add("FastAPI")
+                if "flask" in content_lower:
+                    frameworks.add("Flask")
+                if "django" in content_lower:
+                    frameworks.add("Django")
+                if "express" in content_lower or "require('express')" in content_lower:
+                    frameworks.add("Express.js")
+                if "sqlalchemy" in content_lower or "__tablename__" in content_lower:
+                    frameworks.add("SQLAlchemy ORM")
+                if "react" in content_lower or "from 'react'" in content_lower:
+                    frameworks.add("React")
+                if "next" in content_lower:
+                    frameworks.add("Next.js")
+                if "vue" in content_lower:
+                    frameworks.add("Vue.js")
+            except Exception:
+                pass
+        return sorted(list(frameworks))
+
+    @staticmethod
+    def _format_sample_paths(files: List[Path], root: Path) -> str:
+        if not files:
+            return "repository files"
+        sample_paths = []
+        for f in files[:3]:
+            try:
+                sample_paths.append(str(f.relative_to(root)).replace("\\", "/"))
+            except ValueError:
+                sample_paths.append(f.name)
+        desc = ", ".join(sample_paths)
+        if len(files) > 3:
+            desc += f" (and {len(files) - 3} more)"
+        return desc
+
+
     def scan_repository(
         self,
         repo_path: str,
@@ -348,7 +424,7 @@ class BrownfieldScanner:
             contracts.append(db_contract)
             self.db.save_contract(db_contract)
 
-        # 4. Create Inferred Initial EARS Requirements
+        # 4. Create Inferred Initial & Task-Specific EARS Requirements (§1.5, §38)
         req1 = EARSEngine.create_requirement(
             req_id=f"REQ-BROWNFIELD-01_{p_id}",
             project_id=p_id,
@@ -366,6 +442,142 @@ class BrownfieldScanner:
         )
         req1.status = ArtifactState.IMPLEMENTED
         self.db.save_requirement(req1)
+
+        # 4.1 Discovered API Routes Requirements (Event-Driven)
+        # "WHEN a request hits [METHOD] [route], the system shall [inferred behavior]"
+        unique_endpoints = sorted(list(set(api_endpoints)))
+        backend_comp_name = (
+            components[f"COMP-BACKEND_{p_id}"].name
+            if f"COMP-BACKEND_{p_id}" in components
+            else "Backend & API Services"
+        )
+        for idx, ep in enumerate(unique_endpoints, start=1):
+            parts = ep.split(" ", 1)
+            if len(parts) == 2:
+                method, route = parts[0].upper(), parts[1]
+            else:
+                method, route = "GET", ep
+
+            behavior = self._infer_route_behavior(method, route)
+            route_req = EARSEngine.create_requirement(
+                req_id=f"REQ-ROUTE-{idx:02d}_{p_id}",
+                project_id=p_id,
+                title=f"API Route: {method} {route}",
+                system_name="system",
+                response=behavior,
+                pattern=EARSPattern.EVENT_DRIVEN,
+                trigger=f"a request hits {method} {route}",
+                priority=RequirementPriority.HIGH,
+                category="API_ROUTE",
+                affected_components=[backend_comp_name],
+                acceptance_criteria=[
+                    f"Return HTTP 200/2xx upon successful processing of {method} {route}",
+                    f"Validate all request inputs, parameters, and payloads for {route}",
+                    f"Return appropriate HTTP error codes on invalid requests or missing resources for {route}",
+                ],
+                confidence=0.95,
+            )
+            route_req.status = ArtifactState.IMPLEMENTED
+            self.db.save_requirement(route_req)
+
+        # 4.2 Discovered Models / Schemas Requirements (Data Contract)
+        unique_models = sorted(list(set(sql_tables)))
+        db_comp_name = (
+            components[f"COMP-DATABASE_{p_id}"].name
+            if f"COMP-DATABASE_{p_id}" in components
+            else "Database & Data Storage"
+        )
+        for idx, model_name in enumerate(unique_models, start=1):
+            model_req = EARSEngine.create_requirement(
+                req_id=f"REQ-MODEL-{idx:02d}_{p_id}",
+                project_id=p_id,
+                title=f"Data Contract: {model_name}",
+                system_name="database storage layer",
+                response=f"persist and enforce schema structure, relational integrity, and field validation for the {model_name} data model",
+                pattern=EARSPattern.UBIQUITOUS,
+                priority=RequirementPriority.HIGH,
+                category="DATA_CONTRACT",
+                affected_components=[db_comp_name],
+                acceptance_criteria=[
+                    f"Ensure database schema maintains structural definitions for {model_name}",
+                    f"Enforce primary keys, unique constraints, and foreign key relationships for {model_name}",
+                    f"Prevent invalid or malformed records from persisting into {model_name}",
+                ],
+                confidence=0.95,
+            )
+            model_req.status = ArtifactState.IMPLEMENTED
+            self.db.save_requirement(model_req)
+
+        # 4.3 Discovered Components Requirements (Component-Level Architecture)
+        backend_frameworks = self._detect_frameworks(backend_files)
+        frontend_frameworks = self._detect_frameworks(frontend_files)
+        db_frameworks = self._detect_frameworks(db_files)
+
+        if f"COMP-BACKEND_{p_id}" in components:
+            fw_desc = ", ".join(backend_frameworks) if backend_frameworks else "modular server"
+            sample_paths = self._format_sample_paths(backend_files, root)
+            comp_backend_req = EARSEngine.create_requirement(
+                req_id=f"REQ-COMP-BACKEND_{p_id}",
+                project_id=p_id,
+                title=f"Component Architecture: {components[f'COMP-BACKEND_{p_id}'].name}",
+                system_name=components[f"COMP-BACKEND_{p_id}"].name,
+                response=f"organize request routing, business logic, and service controllers adhering to {fw_desc} patterns across {sample_paths}",
+                pattern=EARSPattern.UBIQUITOUS,
+                priority=RequirementPriority.HIGH,
+                category="ARCHITECTURE",
+                affected_components=[components[f"COMP-BACKEND_{p_id}"].name],
+                acceptance_criteria=[
+                    f"Maintain clean separation of concerns in {components[f'COMP-BACKEND_{p_id}'].name}",
+                    f"Adhere to {fw_desc} architectural conventions for all backend service files",
+                ],
+                confidence=0.9,
+            )
+            comp_backend_req.status = ArtifactState.IMPLEMENTED
+            self.db.save_requirement(comp_backend_req)
+
+        if f"COMP-FRONTEND_{p_id}" in components:
+            fw_desc = ", ".join(frontend_frameworks) if frontend_frameworks else "responsive web"
+            sample_paths = self._format_sample_paths(frontend_files, root)
+            comp_frontend_req = EARSEngine.create_requirement(
+                req_id=f"REQ-COMP-FRONTEND_{p_id}",
+                project_id=p_id,
+                title=f"Component Architecture: {components[f'COMP-FRONTEND_{p_id}'].name}",
+                system_name=components[f"COMP-FRONTEND_{p_id}"].name,
+                response=f"render user interfaces, manage client-side state, and handle user interactions adhering to {fw_desc} patterns across {sample_paths}",
+                pattern=EARSPattern.UBIQUITOUS,
+                priority=RequirementPriority.MEDIUM,
+                category="ARCHITECTURE",
+                affected_components=[components[f"COMP-FRONTEND_{p_id}"].name],
+                acceptance_criteria=[
+                    f"Ensure responsive UI layout and state handling in {components[f'COMP-FRONTEND_{p_id}'].name}",
+                    f"Adhere to {fw_desc} component conventions for all frontend client files",
+                ],
+                confidence=0.9,
+            )
+            comp_frontend_req.status = ArtifactState.IMPLEMENTED
+            self.db.save_requirement(comp_frontend_req)
+
+        if f"COMP-DATABASE_{p_id}" in components:
+            fw_desc = ", ".join(db_frameworks) if db_frameworks else "relational database"
+            sample_paths = self._format_sample_paths(db_files, root)
+            comp_db_req = EARSEngine.create_requirement(
+                req_id=f"REQ-COMP-DATABASE_{p_id}",
+                project_id=p_id,
+                title=f"Component Architecture: {components[f'COMP-DATABASE_{p_id}'].name}",
+                system_name=components[f"COMP-DATABASE_{p_id}"].name,
+                response=f"manage schema migrations, relational constraints, and persistent storage operations adhering to {fw_desc} patterns across {sample_paths}",
+                pattern=EARSPattern.UBIQUITOUS,
+                priority=RequirementPriority.HIGH,
+                category="DATA_CONTRACT",
+                affected_components=[components[f"COMP-DATABASE_{p_id}"].name],
+                acceptance_criteria=[
+                    f"Maintain schema migration history and relational integrity in {components[f'COMP-DATABASE_{p_id}'].name}",
+                    f"Adhere to {fw_desc} patterns for all database entities and tables",
+                ],
+                confidence=0.9,
+            )
+            comp_db_req.status = ArtifactState.IMPLEMENTED
+            self.db.save_requirement(comp_db_req)
 
         # 5. Add Dependencies
         if f"COMP-BACKEND_{p_id}" in components and f"COMP-DATABASE_{p_id}" in components:

@@ -32,6 +32,7 @@ class SpecHealthReport:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "entropy": round(self.entropy, 4),
+            "entropy_score": round(self.entropy, 4),
             "health_score": round(self.health_score, 2),
             "metrics": self.metrics,
             "recommendations": self.recommendations,

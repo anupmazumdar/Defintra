@@ -93,7 +93,11 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.4rem;
+      max-width: calc(100vw - 260px);
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .nav-tabs::-webkit-scrollbar { display: none; }
     .nav-tab {
       background: transparent;
       border: none;
@@ -474,7 +478,7 @@
           <input id="blastNodeId" class="input-field flex-1" placeholder="Enter Node ID (e.g. D-001, REQ-001)">
           <button class="btn" onclick="simulateBlastRadius()">Simulate Impact</button>
         </div>
-        <div id="blastResults" class="mt-4 hidden">
+        <div id="blastResults" class="mt-4" style="display:none;">
           <div id="blastSummary" class="text-base mb-2 text-white"></div>
           <pre id="blastJson" class="code-block"></pre>
         </div>
@@ -541,9 +545,9 @@
             <label class="text-xs text-muted">Target Model Format</label>
             <select id="compileTarget" class="select-field">
               <option value="CLAUDE">Claude (XML tags)</option>
-              <option value="MARKDOWN">OpenAI (Markdown)</option>
-              <option value="MARKDOWN">Gemini</option>
-              <option value="MARKDOWN">Antigravity</option>
+              <option value="OPENAI">OpenAI (Markdown)</option>
+              <option value="GEMINI">Gemini</option>
+              <option value="ANTIGRAVITY">Antigravity</option>
             </select>
           </div>
         </div>
@@ -710,6 +714,7 @@
           <div class="text-muted text-base">Running system diagnosis...</div>
         </div>
       </div>
+    </section>
     <!-- 15. POLICY ENGINE TAB -->
     <section id="tab-policy" class="tab-content">
       <div class="flex-row-between mb-4">
@@ -840,7 +845,10 @@
       const btn = Array.from(document.querySelectorAll('.nav-tab')).find(b => 
         b.getAttribute('onclick')?.includes(tabId)
       );
-      if (btn) btn.classList.add('active');
+      if (btn) {
+        btn.classList.add('active');
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
 
       if (tabId === 'graph') renderGraph();
       if (tabId === 'operations') loadRunbook('backup');

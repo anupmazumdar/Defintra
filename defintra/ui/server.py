@@ -334,6 +334,9 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
             conflicts = db.get_conflicts(project.id)
             audit = db.get_audit_entries(project.id)
             health = EntropyCalculator.compute(reqs, decs, asms, unks, conflicts)
+            health_dict = health.to_dict()
+            if "entropy" in health_dict and "entropy_score" not in health_dict:
+                health_dict["entropy_score"] = health_dict["entropy"]
 
             state = {
                 "project": {
@@ -343,7 +346,7 @@ class DefintraAPIHandler(BaseHTTPRequestHandler):
                     "domain": project.domain,
                     "source_type": project.source_type,
                 },
-                "health": health.to_dict(),
+                "health": health_dict,
                 "requirements": [r.model_dump() for r in reqs],
                 "decisions": [d.model_dump() for d in decs],
                 "assumptions": [a.model_dump() for a in asms],

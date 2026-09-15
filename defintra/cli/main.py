@@ -44,8 +44,13 @@ app = typer.Typer(
 console = Console()
 
 
-def get_db() -> Database:
-    return Database(".defintra/project.db")
+def get_db(db_path: str = ".defintra/project.db") -> Database:
+    from pathlib import Path
+    if not Path(db_path).exists():
+        console.print(f"[bold red]Error: No Defintra project found at '{db_path}'.[/bold red]")
+        console.print("[dim]Run `defintra init <name>` first, or cd into your project directory.[/dim]")
+        raise typer.Exit(1)
+    return Database(db_path)
 
 
 @app.command()
@@ -56,6 +61,9 @@ def init(
     """
     Initialize a new Defintra project workspace and local SQLite knowledge graph.
     """
+    from pathlib import Path
+    Path(".defintra").mkdir(parents=True, exist_ok=True)
+    Path(".defintra/project.db").touch(exist_ok=True)
     db = get_db()
     engine = DiscoveryEngine(db)
     project = engine.run_fast_path(name, f"Initial project initialization for {name}")
