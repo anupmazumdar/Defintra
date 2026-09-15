@@ -82,8 +82,21 @@ class BenchmarkRunner:
         """
         # 1. Parse input content
         raw_text = input_text_or_path.strip()
-        path_obj = Path(input_text_or_path)
-        if path_obj.exists() and path_obj.is_file():
+        is_file = False
+        path_obj = None
+        try:
+            if (
+                len(input_text_or_path) < 4096
+                and "\x00" not in input_text_or_path
+                and "\n" not in input_text_or_path
+            ):
+                path_obj = Path(input_text_or_path)
+                if path_obj.exists() and path_obj.is_file():
+                    is_file = True
+        except (OSError, ValueError):
+            is_file = False
+
+        if is_file and path_obj is not None:
             raw_text = path_obj.read_text(encoding="utf-8")
 
         input_summary = (raw_text[:80] + "...") if len(raw_text) > 80 else raw_text

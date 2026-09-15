@@ -96,9 +96,18 @@ def analyze(
     db = get_db()
     engine = DiscoveryEngine(db)
 
-    # Check if input is a file
-    p = Path(input_text)
-    if p.exists() and p.is_file():
+    # Check if input is a file (guarded against POSIX OSError 36: File name too long)
+    p = None
+    is_file = False
+    try:
+        if len(input_text) < 4096 and "\x00" not in input_text and "\n" not in input_text:
+            p = Path(input_text)
+            if p.exists() and p.is_file():
+                is_file = True
+    except (OSError, ValueError):
+        is_file = False
+
+    if is_file and p is not None:
         raw_content = p.read_text(encoding="utf-8")
         p_name = project_name or p.stem
         source_trust_level = "FILE_INGESTED"

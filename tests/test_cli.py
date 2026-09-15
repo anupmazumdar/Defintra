@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -366,6 +367,36 @@ def test_cli_analyze_input_size_cap_and_force(monkeypatch):
         assert "Notice" in res_force.output
         assert "Proceeding with full" in res_force.output
         assert "--force" in res_force.output
+    finally:
+        gc.collect()
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_cli_analyze_posix_long_filename_oserror(monkeypatch):
+    """
+    Simulates POSIX filesystem throwing OSError(36, 'File name too long')
+    when inspecting candidate input path during analyze.
+    """
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_file = os.path.join(tmpdir, "project.db")
+        monkeypatch.setattr(
+            "defintra.cli.main.get_db",
+            lambda: __import__("defintra.core.db.database", fromlist=["Database"]).Database(db_file),
+        )
+
+        orig_exists = Path.exists
+
+        def mock_exists_raise(self):
+            if "project.db" in str(self) or "schema.sql" in str(self):
+                return orig_exists(self)
+            raise OSError(36, "File name too long")
+
+        monkeypatch.setattr(Path, "exists", mock_exists_raise)
+
+        res = runner.invoke(app, ["analyze", "Simulate long input prompt text"])
+        assert res.exit_code == 0
+        assert "Analysis Summary" in res.output
     finally:
         gc.collect()
         shutil.rmtree(tmpdir, ignore_errors=True)
