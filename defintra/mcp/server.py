@@ -303,11 +303,26 @@ class DefintraMCPServer:
         return {"project_id": project.id, "contracts": res}
 
 
-def handle_stdio_rpc():
+def handle_stdio_rpc(db_path: str = ".defintra/project.db"):
     """
-    Lightweight JSON-RPC stdio dispatcher for MCP integrations.
+    MCP-compliant JSON-RPC stdio dispatcher.
     """
-    server = DefintraMCPServer()
+    server = DefintraMCPServer(db_path)
+
+    TOOLS = [
+        {"name": "get_project_state", "description": "Get current project health, requirements, decisions summary.", "inputSchema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": []}},
+        {"name": "compile_context", "description": "Compile minimum sufficient context for an AI coding task.", "inputSchema": {"type": "object", "properties": {"task_description": {"type": "string"}, "role": {"type": "string"}, "target_format": {"type": "string"}, "max_tokens": {"type": "integer"}, "project_id": {"type": "string"}}, "required": ["task_description"]}},
+        {"name": "calculate_blast_radius", "description": "Simulate blast radius of changing a node.", "inputSchema": {"type": "object", "properties": {"node_id": {"type": "string"}, "project_id": {"type": "string"}}, "required": ["node_id"]}},
+        {"name": "detect_conflicts", "description": "Detect requirement and architectural conflicts.", "inputSchema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": []}},
+        {"name": "generate_test_pack", "description": "Generate test packs (human/automated/security).", "inputSchema": {"type": "object", "properties": {"pack_type": {"type": "string"}, "project_id": {"type": "string"}}, "required": []}},
+        {"name": "check_stability_budget", "description": "Check architecture stability and churn index.", "inputSchema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": []}},
+        {"name": "trace_incident", "description": "Map production error back to requirements.", "inputSchema": {"type": "object", "properties": {"error_text": {"type": "string"}, "project_id": {"type": "string"}}, "required": ["error_text"]}},
+        {"name": "generate_runbook", "description": "Generate operational runbooks.", "inputSchema": {"type": "object", "properties": {"runbook_type": {"type": "string"}, "project_id": {"type": "string"}}, "required": []}},
+        {"name": "propose_decision", "description": "Record an architectural decision.", "inputSchema": {"type": "object", "properties": {"decision_id": {"type": "string"}, "title": {"type": "string"}, "decision": {"type": "string"}, "reason": {"type": "string"}, "rejected_alternatives": {"type": "array"}, "project_id": {"type": "string"}}, "required": ["decision_id", "title", "decision", "reason"]}},
+        {"name": "dispatch_team_task", "description": "Dispatch task to a specialized AI team role.", "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}, "role": {"type": "string"}, "project_id": {"type": "string"}}, "required": ["task"]}},
+        {"name": "check_staleness", "description": "Check stale requirements and decisions.", "inputSchema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": []}},
+    ]
+
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -317,72 +332,75 @@ def handle_stdio_rpc():
             params = req.get("params", {})
             req_id = req.get("id")
 
-            if method == "get_project_state":
-                res = server.get_project_state(params.get("project_id"))
-            elif method == "calculate_blast_radius":
-                res = server.calculate_blast_radius(params.get("node_id"), params.get("project_id"))
-            elif method == "propose_decision":
-                res = server.propose_decision(
-                    decision_id=params.get("decision_id"),
-                    title=params.get("title"),
-                    decision=params.get("decision"),
-                    reason=params.get("reason"),
-                    rejected_alternatives=params.get("rejected_alternatives", []),
-                    project_id=params.get("project_id"),
-                )
-            elif method == "compile_context":
-                res = server.compile_context(
-                    task_description=params.get("task_description", ""),
-                    project_id=params.get("project_id"),
-                    role=params.get("role", "GENERAL"),
-                    target_format=params.get("target_format", "markdown"),
-                    max_tokens=params.get("max_tokens", 4000),
-                )
-            elif method == "scan_repository":
-                res = server.scan_repository(params.get("repo_path", "."), params.get("name"))
-            elif method == "detect_conflicts":
-                res = server.detect_conflicts(params.get("project_id"))
-            elif method == "resolve_conflict":
-                res = server.resolve_conflict(
-                    conflict_id=params.get("conflict_id"),
-                    resolution_notes=params.get("resolution_notes", ""),
-                    winning_entity_id=params.get("winning_entity_id"),
-                    project_id=params.get("project_id"),
-                )
-            elif method == "generate_test_pack":
-                res = server.generate_test_pack(params.get("pack_type", "human"), params.get("project_id"))
-            elif method == "dispatch_team_task":
-                res = server.dispatch_team_task(params.get("task", ""), params.get("role", "SOFTWARE_ARCHITECT"), params.get("project_id"))
-            elif method == "trace_incident":
-                res = server.trace_incident(params.get("error_text", ""), params.get("project_id"))
-            elif method == "generate_runbook":
-                res = server.generate_runbook(params.get("runbook_type", "backup"), params.get("project_id"))
-            elif method == "check_stability_budget":
-                res = server.check_stability_budget(params.get("project_id"))
-            elif method == "diff_specifications":
-                res = server.diff_specifications(params.get("dir_a", {}), params.get("dir_b", {}))
-            elif method == "check_staleness":
-                res = server.check_staleness(params.get("project_id"))
-            elif method == "get_improvements":
-                res = server.get_improvements(params.get("project_id"))
-            elif method == "diagnose_recovery":
-                res = server.diagnose_recovery(params.get("project_id"))
-            elif method == "generate_adrs":
-                res = server.generate_adrs(params.get("project_id"))
-            elif method == "schedule_phases":
-                res = server.schedule_phases(params.get("project_id"))
-            elif method == "validate_contracts":
-                res = server.validate_contracts(params.get("project_id"))
+            # MCP Protocol Handshake
+            if method == "initialize":
+                res = {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "defintra", "version": "0.1.0"},
+                }
+            elif method == "notifications/initialized":
+                continue
+            elif method == "ping":
+                res = {}
+            elif method == "tools/list":
+                res = {"tools": TOOLS}
+            elif method == "tools/call":
+                tool_name = params.get("name")
+                tool_args = params.get("arguments", {})
+
+                if tool_name == "get_project_state":
+                    result = server.get_project_state(tool_args.get("project_id"))
+                elif tool_name == "compile_context":
+                    result = server.compile_context(
+                        task_description=tool_args.get("task_description", ""),
+                        project_id=tool_args.get("project_id"),
+                        role=tool_args.get("role", "GENERAL"),
+                        target_format=tool_args.get("target_format", "markdown"),
+                        max_tokens=tool_args.get("max_tokens", 4000),
+                    )
+                elif tool_name == "calculate_blast_radius":
+                    result = server.calculate_blast_radius(tool_args.get("node_id"), tool_args.get("project_id"))
+                elif tool_name == "detect_conflicts":
+                    result = server.detect_conflicts(tool_args.get("project_id"))
+                elif tool_name == "generate_test_pack":
+                    result = server.generate_test_pack(tool_args.get("pack_type", "human"), tool_args.get("project_id"))
+                elif tool_name == "check_stability_budget":
+                    result = server.check_stability_budget(tool_args.get("project_id"))
+                elif tool_name == "trace_incident":
+                    result = server.trace_incident(tool_args.get("error_text", ""), tool_args.get("project_id"))
+                elif tool_name == "generate_runbook":
+                    result = server.generate_runbook(tool_args.get("runbook_type", "backup"), tool_args.get("project_id"))
+                elif tool_name == "propose_decision":
+                    result = server.propose_decision(
+                        decision_id=tool_args.get("decision_id"),
+                        title=tool_args.get("title"),
+                        decision=tool_args.get("decision"),
+                        reason=tool_args.get("reason"),
+                        rejected_alternatives=tool_args.get("rejected_alternatives", []),
+                        project_id=tool_args.get("project_id"),
+                    )
+                elif tool_name == "dispatch_team_task":
+                    result = server.dispatch_team_task(tool_args.get("task", ""), tool_args.get("role", "SOFTWARE_ARCHITECT"), tool_args.get("project_id"))
+                elif tool_name == "check_staleness":
+                    result = server.check_staleness(tool_args.get("project_id"))
+                else:
+                    result = {"error": f"Unknown tool '{tool_name}'"}
+
+                res = {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
+
             else:
                 res = {"error": f"Unknown method '{method}'"}
 
             response = {"jsonrpc": "2.0", "id": req_id, "result": res}
             sys.stdout.write(json.dumps(response) + "\n")
             sys.stdout.flush()
+
         except Exception as e:
-            err_response = {"jsonrpc": "2.0", "id": None, "error": str(e)}
+            err_response = {"jsonrpc": "2.0", "id": None, "error": {"code": -32603, "message": str(e)}}
             sys.stdout.write(json.dumps(err_response) + "\n")
             sys.stdout.flush()
+
 
 
 if __name__ == "__main__":

@@ -1747,7 +1747,7 @@ def run_mcp_server(
     Launch the Defintra Model Context Protocol (MCP) server over stdio (§44).
     """
     from defintra.mcp.server import handle_stdio_rpc
-    handle_stdio_rpc()
+    handle_stdio_rpc(db_path=db_path)
 
 
 @app.command(name="purge")
